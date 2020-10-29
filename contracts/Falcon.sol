@@ -111,6 +111,9 @@ contract Falcon {
         return FALCON_ERR_BADSIG;
       }
     } else if (signatureType == FALCON_SIG_COMPRESSED) {
+      if ((signature[0] & 0xF0) != 0x30) {
+        return FALCON_ERR_FORMAT;
+      }
     } else if (signatureType == FALCON_SIG_PADDED) {
     } else if (signatureType == FALCON_SIG_CT) {
     } else {
