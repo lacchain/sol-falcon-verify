@@ -115,6 +115,12 @@ contract Falcon {
         return FALCON_ERR_FORMAT;
       }
     } else if (signatureType == FALCON_SIG_PADDED) {
+      if ((signature[0] & 0xF0) != 0x30) {
+        return FALCON_ERR_FORMAT;
+      }
+      if (signature.length != signaturePaddedSize(logn)) {
+        return FALCON_ERR_FORMAT;
+      }
     } else if (signatureType == FALCON_SIG_CT) {
     } else {
       return FALCON_ERR_BADARG;
@@ -128,4 +134,18 @@ contract Falcon {
   function signatureCtSize(uint8 logn) private pure returns (uint16) {
     return ((uint16(3) << ((logn) - 1)) - ((logn) == 3?1:0) + 41);
   }
+
+  /*
+   * Signature size (in bytes) when using the PADDED format. The size
+   * is exact.
+   */
+  function signaturePaddedSize(uint8 logn) private pure returns (uint16) {
+   return (uint16(44)
+   + uint16(3 * (256 >> (10 - (logn))))
+   + uint16(2 * (128 >> (10 - (logn))))
+   + uint16(3 * (64 >> (10 - (logn))))
+   + uint16(2 * (16 >> (10 - (logn))))
+   - uint16(2 * (2 >> (10 - (logn))))
+   - uint16(8 * (1 >> (10 - (logn)))));
+ }
 }
