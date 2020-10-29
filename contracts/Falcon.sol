@@ -122,6 +122,13 @@ contract Falcon {
         return FALCON_ERR_FORMAT;
       }
     } else if (signatureType == FALCON_SIG_CT) {
+      if ((signature[0] & 0xF0) != 0x50) {
+        return FALCON_ERR_FORMAT;
+      }
+      if (signature.length != signatureCtSize(logn)) {
+        return FALCON_ERR_FORMAT;
+      }
+      ct = true;
     } else {
       return FALCON_ERR_BADARG;
     }

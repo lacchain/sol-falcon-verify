@@ -107,5 +107,23 @@ contract("Falcon", accounts => {
       let ret = await falcon.verify.call(signature, signatureType, pubKey, Buffer.alloc(0));
       assert.equal(ret, -3, 'Error return doesn\'t match Falcon.FALCON_ERR_FORMAT');
     });
+
+    it("CONSTANT-TIME: has to have first nibble of signature equals 5", async() => {
+      let signature = Buffer.alloc(44);
+      signature.write('41', 0, 1, 'hex');
+      let pubKey = Buffer.from('01', 'hex'); // 1 means signature size of 44 bytes
+      let signatureType = 3;
+      let ret = await falcon.verify.call(signature, signatureType, pubKey, Buffer.alloc(0));
+      assert.equal(ret, -3, 'Error return doesn\'t match Falcon.FALCON_ERR_FORMAT');
+    });
+
+    it("CONSTANT-TIME: has to have proper signature length in the public key", async() => {
+      let signature = Buffer.alloc(42);
+      signature.write('51', 0, 1, 'hex');
+      let pubKey = Buffer.from('01', 'hex'); // 1 means signature size of 44 bytes
+      let signatureType = 3;
+      let ret = await falcon.verify.call(signature, signatureType, pubKey, Buffer.alloc(0));
+      assert.equal(ret, -3, 'Error return doesn\'t match Falcon.FALCON_ERR_FORMAT');
+    });
   });
 });
