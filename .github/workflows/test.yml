@@ -14,5 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
-      - run: npm install -g truffle
-      - run: npx truffle test
+      - run: npm install --save-dev truffle
+      - run: npm install --save-dev solidity-coverage
+      - run: npx truffle run coverage
