@@ -35,6 +35,16 @@ contract("Falcon", accounts => {
       let ret = await falcon.verify.call(Buffer.alloc(42), 0, pubKey, Buffer.alloc(0));
       assert.equal(ret, -3, 'Error return doesn\'t match Falcon.FALCON_ERR_FORMAT');
     });
+
+    it("has to have proper length", async() => {
+      let signature = Buffer.alloc(44);
+      signature.write('31', 0, 1, 'hex');
+      let pubKey = Buffer.alloc(4);
+      pubKey.write('01', 0, 1, 'hex'); // 1 means pub key size of 5 bytes
+      let signatureType = 1;
+      let ret = await falcon.verify.call(signature, signatureType, pubKey, Buffer.alloc(0));
+      assert.equal(ret, -3, 'Error return doesn\'t match Falcon.FALCON_ERR_FORMAT');
+    });
   })
 
   describe("Signature", async() => {

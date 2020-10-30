@@ -132,6 +132,9 @@ contract Falcon {
     } else {
       return FALCON_ERR_BADARG;
     }
+    if (pubKey.length != pubKeySize(logn)) {
+      return FALCON_ERR_FORMAT;
+    }
     return 0;
   }
 
@@ -155,4 +158,11 @@ contract Falcon {
    - uint16(2 * (2 >> (10 - (logn))))
    - uint16(8 * (1 >> (10 - (logn)))));
  }
+
+  /*
+   * Public key size (in bytes). The size is exact.
+   */
+  function pubKeySize(uint8 logn) private pure returns (uint16) {
+    return (((logn) <= 1? uint16(4): (uint16(7) << ((logn) - 2))) + 1);
+  }
 }
