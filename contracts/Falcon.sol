@@ -3,14 +3,10 @@ pragma solidity ^0.7.0;
 
 // Some parts: Apache-2.0
 
-/* TODO: ==>
-TODO: <== */
-
 // Useful reference:
 //    https://medium.com/@jeancvllr/solidity-tutorial-all-about-bytes-9d88fdb22676
 //    https://medium.com/@jeancvllr/solidity-tutorial-all-about-libraries-762e5a3692f9
 //    https://manojpramesh.github.io/solidity-cheatsheet/
-
 
 
 contract Falcon
@@ -19,6 +15,25 @@ contract Falcon
     // ** STATE VARIABLES in 'storage'
     // ** CONSTANTS
     // ***************************************************************************
+    int16 constant private FALCON_ERR_SUCCESS  = 0;
+    int16 constant private FALCON_ERR_RANDOM   = -1;
+    int16 constant private FALCON_ERR_SIZE     = -2;
+    int16 constant private FALCON_ERR_FORMAT   = -3;
+    int16 constant private FALCON_ERR_BADSIG   = -4;
+    int16 constant private FALCON_ERR_BADARG   = -5;
+    int16 constant private FALCON_ERR_INTERNAL = -6;
+
+    // Signature formats
+    uint8 constant private FALCON_SIG_INFERRED   = 0; // Signature format is inferred from the signature header byte; In this case, the signature is malleable (since a signature value can be transcoded to other formats).
+    uint8 constant private FALCON_SIG_COMPRESSED = 1; // Variable-size signature. This format produces the most compact signatures on average, but the signature size may vary depending on private key, signed data, and random seed.
+    uint8 constant private FALCON_SIG_PADDED     = 2; // Fixed-size signature. Same as compressed, but includes padding to a known fixed size (FALCON_SIG_PADDED_SIZE).
+                                                      // With this format, the signature generation loops until an appropriate signature size is achieved (such looping is uncommon) and adds the padding bytes;
+                                                      // the verification functions check the presence and contents of the padding bytes.
+    uint8 constant private FALCON_SIG_CT         = 3; // Fixed-size format amenable to constant-time implementation. All formats allow constant-time code with regard to the private key;
+                                                      // the 'CT' format also prevents information about the signature value and the signed data hash to leak through timing-based side channels (this feature is rarely needed).
+    uint8 constant private FALCON_SIG_INVALID    = 4;
+
+
     uint32 constant private SHAKE256_RATE = 136;  // The SHAKE-256 byte absorption rate (aka OQS_SHA3_SHAKE256_RATE)    // [4+2+2+2=10 bytes]
     int16  constant private CTX_ELEMENTS = 26; // Number of uint64 context elements
     int16  constant private PQC_SHAKEINCCTX_BYTES = (8 * CTX_ELEMENTS); // (sizeof(uint64) * 26)
@@ -443,6 +458,62 @@ contract Falcon
     }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    ///////////////////////////////////////
+    //
+    ///////////////////////////////////////
+    function uint8_array_uint16_get(uint8[] memory bytearray, uint32 wordindex) private pure returns (uint16 result16)
+    {
+        // If the array was an array of uint16 values:
+        //     result16 = wordarray[wordindex];
+        // TODO: Check me, incl endianess
+        result16 = uint16((uint8(bytearray[wordindex*2]) << 8) | uint8(bytearray[wordindex*2+1]));
+    }
+
+
+    ///////////////////////////////////////
+    //
+    ///////////////////////////////////////
+    function uint8_array_uint16_set(uint8[] memory bytearray, uint32 wordindex, uint16 value16) private pure
+    {
+        // If the array was an array of uint16 values:
+        //     wordarray[wordindex] = value16;
+        // TODO: Check me, incl endianess
+        bytearray[wordindex*2  ] = uint8(uint16(value16) >> 8    );
+        bytearray[wordindex*2+1] = uint8(uint16(value16) & 0x00FF);
+    }
+
+
+    ///////////////////////////////////////
+    //
+    ///////////////////////////////////////
+    function uint8_array_int16_set(uint8[] memory bytearray, uint32 wordindex, int16 value16) private pure
+    {
+        // If the array was an array of uint16 values:
+        //     wordarray[wordindex] = value16;
+        // TODO: Check me, incl endianess and sign
+        bytearray[wordindex*2  ] = uint8(int16(value16) >> 8    );
+        bytearray[wordindex*2+1] = uint8(int16(value16) & 0x00FF);
+    }
+
+
+
+
 /*
     function toBytes(address a) public pure returns (bytes memory b)
     {
@@ -707,12 +778,12 @@ contract Falcon
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function keccak_inc_absorb(uint32 r, bytes memory m, uint32 mlen) public payable
+    function keccak_inc_absorb(uint32 r, uint8[] memory msg, uint32 msgLen) public payable
     {
         uint32  i;
 
         //fprintf(stdout, "TRACE: keccak_inc_absorb()\n");
-        while (mlen + shake256_context64[25] >= r)
+        while (msgLen + shake256_context64[25] >= r)
         {
             for (i = 0; i < r - uint32(shake256_context64[25]); i++)
             {
@@ -721,19 +792,17 @@ contract Falcon
                 //uint64 y5 = shake256_context64[25] + i;
                 //uint64 y6 = y5 & 0x07;
                 //uint64 y7 = 8 * y6;
-                //uint8  y8 = uint8(m[i]);
+                //uint8  y8 = uint8(msg[i]);
                 //uint64 y9 = uint64(y8);
                 //uint64 y = y9 << y7;
                 //
                 //x ^= y;
                 ///////////////////////////////////////////////////////////////////////////
 
-                shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(m[i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
+                shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(msg[i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
             }
-            mlen -= uint32(r - shake256_context64[25]);
-/* TODO: ==>
-            m += (r - shake256_context64[25]);
-TODO: <== */
+            msgLen -= uint32(r - shake256_context64[25]);
+            // TODO: msg += (r - shake256_context64[25]);
             shake256_context64[25] = 0;
 
             // Input parameters supplied in member variable shake256_context64.
@@ -741,11 +810,11 @@ TODO: <== */
             KeccakF1600_StatePermute();
         }
 
-        for (i = 0; i < mlen; i++)
+        for (i = 0; i < msgLen; i++)
         {
-            shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(m[i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
+            shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(msg[i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
         }
-        shake256_context64[25] += mlen;
+        shake256_context64[25] += msgLen;
 
     }
 
@@ -828,7 +897,7 @@ TODO: <== */
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function OQS_SHA3_shake256_inc_absorb(bytes memory input, uint32 inlen) public payable
+    function OQS_SHA3_shake256_inc_absorb(uint8[] memory input, uint32 inlen) public payable
     {
         //fprintf(stdout, "TRACE: OQS_SHA3_shake256_inc_absorb()\n");
         keccak_inc_absorb(SHAKE256_RATE, input, inlen);
@@ -874,12 +943,12 @@ TODO: <== */
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(bytes memory /*uint16**/ x, uint32 logn, bytes memory /* uint8 * */ workingStorage) public view
+    function PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(uint8[] memory /*uint16**/ x, uint32 logn, uint8[] memory /* uint8 * */ workingStorage) public view
     {
         uint32 n;
         uint32 n2;
         uint32 u;
-        uint32 m;
+        uint32 msg;
         uint32 p;
         uint32 over;
         //bytes memory /* uint16* */ tt1;
@@ -890,9 +959,9 @@ TODO: <== */
         n = uint32(1) << logn;
         n2 = n << 1;
         over = overtab[logn];
-        m = n + over;
+        msg = n + over;
         // tt1 = (uint16 *)workingStorage;
-        for (u = 0; u < m; u++)
+        for (u = 0; u < msg; u++)
         {
             uint8[2] memory buf;
             uint32    w;
@@ -906,11 +975,11 @@ TODO: <== */
             wr |= ((w - 61445) >> 31) - 1;
             if (u < n)
             {
-                byte_array_uint16_set(x,u,uint16(wr));  //x[u] = uint16(wr);
+                uint8_array_uint16_set(x,u,uint16(wr));  //x[u] = uint16(wr);
             }
             else if (u < n2)
             {
-                byte_array_uint16_set(workingStorage, (u-n), uint16(wr));  //tt1[u - n] = uint16(wr);
+                uint8_array_uint16_set(workingStorage, (u-n), uint16(wr));  //tt1[u - n] = uint16(wr);
             }
             else
             {
@@ -923,7 +992,7 @@ TODO: <== */
             uint32 v;
 
             v = 0;
-            for (u = 0; u < m; u++)
+            for (u = 0; u < msg; u++)
             {
 /* TODO: ==>
                 uint16 *s;
@@ -982,7 +1051,7 @@ TODO: <== */
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_is_short(bytes memory /* const int16_t * */ s1, bytes memory /* const int16_t* */ s2, uint32 logn) public pure returns (int32)
+    function PQCLEAN_FALCON512_CLEAN_is_short(uint8[] memory /* const int16_t * */ s1, uint8[] memory /* const int16_t* */ s2, uint32 logn) public pure returns (int32)
     {
         uint32 n;
         uint32 u;
@@ -996,11 +1065,11 @@ TODO: <== */
         {
             int32 z;
 
-            z = byte_array_uint16_get(s1,u);  //z = s1[u];
+            z = uint8_array_uint16_get(s1,u);  //z = s1[u];
             s += uint32(z * z);
             ng |= s;
 
-            z = byte_array_uint16_get(s2,u);  //z = s2[u];
+            z = uint8_array_uint16_get(s2,u);  //z = s2[u];
             s += uint32(z * z);
             ng |= s;
         }
@@ -1022,7 +1091,7 @@ TODO: <== */
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_modq_decode(bytes memory /*uint16 **/ x, uint16 logn, bytes memory /*const void**/ In, uint32 max_In_len)  public pure returns (uint32)
+    function PQCLEAN_FALCON512_CLEAN_modq_decode(uint8[] memory /*uint16 **/ x, uint16 logn, uint8[] memory /*const void**/ In, uint32 max_In_len)  public pure returns (uint32)
     {
         uint32        n;
         uint32        In_len;
@@ -1059,7 +1128,7 @@ TODO: <== */
                 {
                     return 0;
                 }
-                byte_array_uint16_set(x,u,uint16(w)); //x[u++] = uint16(w);
+                uint8_array_uint16_set(x,u,uint16(w)); //x[u++] = uint16(w);
                 u++;
             }
         }
@@ -1075,7 +1144,7 @@ TODO: <== */
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_comp_decode(bytes memory /*int16_t**/ x, uint32 logn, bytes memory /*const void**/ In, uint32 max_In_len) public pure returns (uint32)
+    function PQCLEAN_FALCON512_CLEAN_comp_decode(uint8[] memory /*int16_t**/ x, uint32 logn, uint8[] memory /*const void**/ In, uint32 max_In_len) public pure returns (uint32)
     {
         //const uint8 *buf;
         uint32  buf_ndx;
@@ -1132,7 +1201,7 @@ TODO: <== */
                 }
             }
             int16 val = int16((s!=0) ? -int(m) : int(m));
-            byte_array_int16_set(x,u,val); // x[u] = int16(s ? -int(m) : int(m));
+            uint8_array_int16_set(x,u,val); // x[u] = int16(s ? -int(m) : int(m));
         }
         return v;
     }
@@ -1259,7 +1328,7 @@ TODO: <== */
     ////////////////////////////////////////
     // Compute NTT on a ring element.
     ////////////////////////////////////////
-    function mq_NTT(bytes memory /*uint16**/ a, uint32 logn) private view
+    function mq_NTT(uint8[] memory /*uint16**/ a, uint32 logn) private view
     {
         uint32  n;
         uint32  t;
@@ -1290,14 +1359,14 @@ TODO: <== */
                     uint32 tmp32;
                     uint16 tmp16;
 
-                    u = byte_array_uint16_get(a,j); // u = a[j];
-                    tmp32 = byte_array_uint16_get(a,j + ht); // tmp = a[j + ht];
+                    u = uint8_array_uint16_get(a,j); // u = a[j];
+                    tmp32 = uint8_array_uint16_get(a,j + ht); // tmp = a[j + ht];
                     v = mq_montymul(tmp32, s);               // v = mq_montymul(a[j + ht], s);
 
                     tmp16 = uint16(mq_add(u, v));
-                    byte_array_uint16_set(a,j   ,tmp16); // a[j]      = uint16(mq_add(u, v));
+                    uint8_array_uint16_set(a,j   ,tmp16); // a[j]      = uint16(mq_add(u, v));
                     tmp16 = uint16(mq_sub(u, v));
-                    byte_array_uint16_set(a,j+ht,tmp16); // a[j + ht] = uint16(mq_sub(u, v));
+                    uint8_array_uint16_set(a,j+ht,tmp16); // a[j + ht] = uint16(mq_sub(u, v));
                 }
                 j1 += t;
             }
@@ -1309,7 +1378,7 @@ TODO: <== */
     ////////////////////////////////////////
     // Compute the inverse NTT on a ring element, binary case.
     ////////////////////////////////////////
-    function mq_iNTT(bytes memory /*uint16**/ a, uint32 logn) public payable
+    function mq_iNTT(uint8[] memory /*uint16**/ a, uint32 logn) public payable
     {
         stackvar_mq_iNTT_n = uint32(1) << logn;
         stackvar_mq_iNTT_t = 1;
@@ -1339,14 +1408,14 @@ TODO: <== */
                     uint32 w;
                     uint16 tmp16;
 
-                    u = byte_array_uint16_get(a,j  ); // u = a[j];
-                    v = byte_array_uint16_get(a,j+stackvar_mq_iNTT_t); // v = a[j + t];
+                    u = uint8_array_uint16_get(a,j  ); // u = a[j];
+                    v = uint8_array_uint16_get(a,j+stackvar_mq_iNTT_t); // v = a[j + t];
                     tmp16 = uint16(mq_add(u, v));
-                    byte_array_uint16_set(a,j,tmp16); // a[j] = uint16(mq_add(u, v));
+                    uint8_array_uint16_set(a,j,tmp16); // a[j] = uint16(mq_add(u, v));
 
                     w = mq_sub(u, v);
                     tmp16 = uint16(mq_montymul(w, s));
-                    byte_array_uint16_set(a,j+stackvar_mq_iNTT_t,tmp16); // a[j + t] = uint16(mq_montymul(w, s));
+                    uint8_array_uint16_set(a,j+stackvar_mq_iNTT_t,tmp16); // a[j + t] = uint16(mq_montymul(w, s));
                 }
                 j1 += dt;
             }
@@ -1363,16 +1432,16 @@ TODO: <== */
 
         for (stackvar_mq_iNTT_m = 0; stackvar_mq_iNTT_m < stackvar_mq_iNTT_n; stackvar_mq_iNTT_m++)
         {
-            uint16 tmp1 = byte_array_uint16_get(a, stackvar_mq_iNTT_m); // a[m];
+            uint16 tmp1 = uint8_array_uint16_get(a, stackvar_mq_iNTT_m); // a[m];
             uint16 tmp2 = uint16(mq_montymul(tmp1, stackvar_mq_iNTT_ni));
-            byte_array_uint16_set(a,stackvar_mq_iNTT_m,tmp2); // a[j + t] = uint16(mq_montymul(w, s));
+            uint8_array_uint16_set(a,stackvar_mq_iNTT_m,tmp2); // a[j + t] = uint16(mq_montymul(w, s));
         }
     }
 
     ////////////////////////////////////////
     // Convert a polynomial (mod q) to Montgomery representation.
     ////////////////////////////////////////
-    function mq_poly_tomonty(bytes memory /*uint16**/ f, uint32 logn) private pure
+    function mq_poly_tomonty(uint8[] memory /*uint16**/ f, uint32 logn) private pure
     {
         uint32  u;
         uint32  n;
@@ -1380,9 +1449,9 @@ TODO: <== */
         n = uint32(1) << logn;
         for (u = 0; u < n; u++)
         {
-            uint16 tmp1 = byte_array_uint16_get(f,u); // f[u];
+            uint16 tmp1 = uint8_array_uint16_get(f,u); // f[u];
             uint16 tmp2 = uint16(mq_montymul(tmp1, R2));
-            byte_array_uint16_set(f,u,tmp2); // f[u] = uint16(mq_montymul(f[u], R2));
+            uint8_array_uint16_set(f,u,tmp2); // f[u] = uint16(mq_montymul(f[u], R2));
         }
     }
 
@@ -1390,7 +1459,7 @@ TODO: <== */
     // Multiply two polynomials together (NTT representation, and using
     // a Montgomery multiplication). Result f*g is written over f.
     ////////////////////////////////////////
-    function mq_poly_montymul_ntt(bytes memory /*uint16**/ f, bytes memory /*uint16**/ g, uint32 logn) private pure
+    function mq_poly_montymul_ntt(uint8[] memory /*uint16**/ f, uint8[] memory /*uint16**/ g, uint32 logn) private pure
     {
         uint32  u;
         uint32  n;
@@ -1398,17 +1467,17 @@ TODO: <== */
         n = uint32(1) << logn;
         for (u = 0; u < n; u++)
         {
-            uint16 tmp1 = byte_array_uint16_get(f,u);
-            uint16 tmp2 = byte_array_uint16_get(g,u);
+            uint16 tmp1 = uint8_array_uint16_get(f,u);
+            uint16 tmp2 = uint8_array_uint16_get(g,u);
             uint16 tmp16 = uint16(mq_montymul(tmp1, tmp2));
-            byte_array_uint16_set(f,u,tmp16); // f[u] = uint16(mq_montymul(f[u], g[u]));
+            uint8_array_uint16_set(f,u,tmp16); // f[u] = uint16(mq_montymul(f[u], g[u]));
         }
     }
 
     ////////////////////////////////////////
     // Subtract polynomial g from polynomial f.
     ////////////////////////////////////////
-    function mq_poly_sub(bytes memory /*uint16**/ f, bytes memory /*uint16**/ g, uint32 logn) private pure
+    function mq_poly_sub(uint8[] memory /*uint16**/ f, uint8[] memory /*uint16**/ g, uint32 logn) private pure
     {
         uint32  u;
         uint32  n;
@@ -1416,10 +1485,10 @@ TODO: <== */
         n = uint32(1) << logn;
         for (u = 0; u < n; u++)
         {
-            uint16 tmp1 = byte_array_uint16_get(f,u);
-            uint16 tmp2 = byte_array_uint16_get(g,u);
+            uint16 tmp1 = uint8_array_uint16_get(f,u);
+            uint16 tmp2 = uint8_array_uint16_get(g,u);
             uint16 tmp16 = uint16(mq_sub(tmp1, tmp2));
-            byte_array_uint16_set(f,u,tmp16); // f[u] = uint16(mq_sub(f[u], g[u]));
+            uint8_array_uint16_set(f,u,tmp16); // f[u] = uint16(mq_sub(f[u], g[u]));
 
         }
     }
@@ -1429,7 +1498,7 @@ TODO: <== */
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_to_ntt_monty(bytes memory /*uint16**/ h, uint32 logn) public view
+    function PQCLEAN_FALCON512_CLEAN_to_ntt_monty(uint8[] memory /*uint16**/ h, uint32 logn) public view
     {
         //fprintf(stdout, "INFO: PQCLEAN_FALCON512_CLEAN_to_ntt_monty() ENTRY\n");
         mq_NTT(h, logn);
@@ -1440,15 +1509,15 @@ TODO: <== */
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_verify_raw(bytes memory  /*uint16**/     c0,
-                                                bytes memory /*int16_t **/    s2,
-                                                bytes memory  /*uint16**/     h,
+    function PQCLEAN_FALCON512_CLEAN_verify_raw(uint8[] memory  /* uint16* */     c0,
+                                                uint8[] memory  /* int16_t* */    s2,
+                                                uint8[] memory  /* uint16* */     h,
                                                 uint32                        logn,
-                                                bytes memory workingStorage) public payable returns (int result)
+                                                uint8[] memory workingStorage) public payable returns (int result)
     {
         uint32 u;
         uint32 n;
-        bytes memory /* uint16* */ tt;
+        uint8[] memory /* uint16* */ tt;
 
         //fprintf(stdout, "INFO: PQCLEAN_FALCON512_CLEAN_verify_raw() ENTRY\n");
         n = uint32(1) << logn;
@@ -1459,11 +1528,11 @@ TODO: <== */
         {
             uint32 w;
 
-            uint16 tmp1 = byte_array_uint16_get(s2,u); // w = uint32(s2[u]);
+            uint16 tmp1 = uint8_array_uint16_get(s2,u); // w = uint32(s2[u]);
             w = uint32(tmp1);
 
             w += Q & -(w >> 31);
-            byte_array_uint16_set(tt,u,uint16(w)); // tt[u] = uint16(w);
+            uint8_array_uint16_set(tt,u,uint16(w)); // tt[u] = uint16(w);
         }
 
         // Compute -s1 = s2*h - c0 mod phi mod q (in tt[]).
@@ -1477,11 +1546,11 @@ TODO: <== */
         {
             int32 w;
 
-            uint16 tmp1 = byte_array_uint16_get(tt,u); // w = int32(tt[u]);
+            uint16 tmp1 = uint8_array_uint16_get(tt,u); // w = int32(tt[u]);
             w = int32(tmp1);
 
             w -= int32(Q & -(((Q >> 1) - uint32(w)) >> 31));
-            byte_array_int16_set(tt,u,int16(w)); // tt[u] = int16(w);  // ((int16 *)tt)[u] = (int16)w;
+            uint8_array_int16_set(tt,u,int16(w)); // tt[u] = int16(w);  // ((int16 *)tt)[u] = (int16)w;
         }
 
         // Signature is valid if and only if the aggregate (-s1,s2) vector is short enough.
@@ -1508,20 +1577,145 @@ TODO: <== */
 
     ////////////////////////////////////////
     //
-    // static int do_verify(const uint8_t*  nonce,
-    //                      const uint8_t*  sigbuf,
-    //                      size_t          sigbuflen,
-    //                      const uint8_t*  m,
-    //                      size_t          mlen,
-    //                      const uint8_t*  pk)
+    // int PQCLEAN_FALCON512_CLEAN_crypto_sign_verify(const uint8_t*  sig,
+    //                                                size_t          sigLen,
+    //                                                const uint8_t*  msg,
+    //                                                size_t          msgLen,
+    //                                                const uint8_t*  pubKey)
     ////////////////////////////////////////
-    function do_verify ( bytes memory /* uint8_t* */ nonce,
-                         bytes memory /* uint8_t* */ /*sigbuf*/,
-                         uint16                      sigbuflen,
-                         bytes memory /* uint8_t* */ m,
-                         uint16                      mlen,
-                         bytes memory /* uint8_t* */ pk        ) public payable returns (int16)
+    function verify (uint8          signatureType,
+                     uint8[] memory sig,
+                     uint16         sigLen,
+                     uint8[] memory msg,
+                     uint16         msgLen,
+                     uint8[] memory pubKey,
+                     uint16         pubKeyLen) public payable returns (int16)
     {
+        //int8 r = start(signature);
+        //if (r < 0)
+        //{
+        //  return r;
+        //}
+        //return finish(signature, signatureType, pubKey, keccak256(data));
+
+        ///////////////////////////////////////////////
+        // Validate params
+        ///////////////////////////////////////////////
+
+        // RULE: SignatureType must be in the range 0..3
+        if ((signatureType != FALCON_SIG_INFERRED) &&
+            (signatureType != FALCON_SIG_COMPRESSED) &&
+            (signatureType != FALCON_SIG_PADDED) &&
+            (signatureType != FALCON_SIG_CT))
+        {
+            return FALCON_ERR_BADARG + (-10);
+        }
+
+        // RULE: Signature must have a minimum length of 42 bytes
+        if (sigLen <= 1 + NONCELEN) // 1 + 40
+        {
+            return FALCON_ERR_FORMAT + (-10);
+        }
+
+        {
+            // First byte should have the form "0cc1nnnn"
+            uint8 sig_bits_cc = (uint8(sig[0]) >> 5) & 0x03;
+            uint8 sig_bits_nnnn = uint8(sig[0]) & 0x0F;
+            uint8 sig_bits_0xx1 = (uint8(sig[0]) >> 4) & 0x09;
+            if (sig_bits_0xx1 != 0x01)
+            {
+                return FALCON_ERR_FORMAT + (-20);
+            }
+            if (sig_bits_nnnn < 1 || sig_bits_nnnn > 10)
+            {
+                return FALCON_ERR_FORMAT + (-20);
+            }
+            // RULE: Signature Type (0cc1nnnn) must have a value (cc) of 0, 1, 2 or 3
+            if (sig_bits_cc < 0 || sig_bits_cc > 3) // silly test, but anyway.
+            {
+                return FALCON_ERR_FORMAT + (-20);
+            }
+        }
+
+        uint32 sigBufLen = sigLen - 1 - NONCELEN;
+        //uint8[sigBufLen] storage sigBuf;
+        uint8[] memory sigBuf = new uint8[](g_SIGBUFLEN); // uint8[g_SIGBUFLEN] memory sigBuf;
+        uint8[] memory nonce = new uint8[](NONCELEN); // uint8[NONCELEN] memory nonce;
+
+        if (sigBufLen == 0)
+        {
+            return FALCON_ERR_FORMAT + (-30);
+        }
+
+        {
+            uint ii;
+            uint sourceOffset = 1;
+            for (ii=0; ii<NONCELEN; ii++)
+            {
+                nonce[ii] = uint8(sig[sourceOffset + ii]);
+            }
+
+            sourceOffset = 1 + NONCELEN;
+            for (ii=0; ii<sigBufLen; ii++)
+            {
+                sigBuf[ii] = uint8(sig[sourceOffset + ii]);
+            }
+        }
+
+        // RULE: Public Key must have length of more than zero
+        if (pubKeyLen <= 0)
+        {
+            return FALCON_ERR_FORMAT;
+        }
+
+        // RULE: Public Key must have the correct length
+        if (pubKeyLen != 897)
+        {
+            return FALCON_ERR_FORMAT;
+        }
+
+        {
+            // First byte should have the form "0000nnnn"
+            uint8 pubkey_bits_0000 = uint8(pubKey[0]) >> 4;
+            uint8 pubKey_bits_nnnn = uint8(pubKey[0]) & 0x0F;
+            uint8 sig_bits_nnnn = uint8(sig[0]) & 0x0F;
+
+            // RULE: Public Key must have a 1st nibble value of 0
+            if (pubkey_bits_0000 != 0x00)
+            {
+                return FALCON_ERR_FORMAT;
+            }
+
+            // RULE: Public Key must have a 2nd nibble value in the range 1 to 10
+            if ((pubKey_bits_nnnn < 1) || (pubKey_bits_nnnn > 10))
+            {
+                return FALCON_ERR_FORMAT;
+            }
+
+            // RULE: Signature must have the same 2nd nibble as that of the public key
+            if (pubKey_bits_nnnn != sig_bits_nnnn)
+            {
+                return FALCON_ERR_BADARG;
+            }
+        }
+
+        // RULE: Inferred Signature Type (0) must have the 1st nibble of the signature equal to 1 (0001)
+        // RULE: Inferred Signature Type (0) must have the correct signature length in the public key
+        // RULE: Compressed Signature Type (1) must have the 1st nibble of the signature equal to 3 (0011)
+        // RULE: Padded Signature Type (2) must have the 1st nibble of the signature equal to 5 (0101)
+        // RULE: Padded Signature Type (2) must have the correct signature length in the public key
+        // RULE: Constant-Time Signature Type (3) must have the 1st nibble of the signature equal to 7 (0111)
+        // RULE: Constant-Time Signature Type (3) must have the correct signature length in the public key
+
+        ////////////////////////////////////////
+        // static int do_verify(const uint8_t*  nonce,
+        //                      const uint8_t*  sigBuf,
+        //                      size_t          sigBufLen,
+        //                      const uint8_t*  msg,
+        //                      size_t          msgLen,
+        //                      const uint8_t*  pubKey)
+        ////////////////////////////////////////
+
         //uint8[2*512] memory workingStorage; // array of 1024 bytes
         //uint16[512]  memory h;
         //uint16[512]  memory hm;
@@ -1530,42 +1724,20 @@ TODO: <== */
         uint16        sz2;
         int16         rc;
 
-        //fprintf(stdout, "INFO: do_verify() ENTRY\n");
-
-        ///////////////////////////////////////////////
-        // Validate params
-        if (uint8(pk[0]) != (0x00 + 9))
-        {
-            return -3;
-        }
-        if (sigbuflen == 0)
-        {
-            return -5;
-        }
-
         ///////////////////////////////////////////////
         // Decode public key.
-        //fprintf(stdout, "INFO: do_verify() calling PQCLEAN_FALCON512_CLEAN_modq_decode()\n");
-/* TODO: ==>
-        sz1 = PQCLEAN_FALCON512_CLEAN_modq_decode( h, 9, pk + 1, PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1);
-TODO: <== */
+        // TODO: sz1 = PQCLEAN_FALCON512_CLEAN_modq_decode( h, 9, pubKey + 1, PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1);
         if (sz1 != PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1)
         {
             return -1;
         }
 
-        //fprintf(stdout, "INFO: do_verify() calling PQCLEAN_FALCON512_CLEAN_to_ntt_monty()\n");
-/* TODO: ==>
-        PQCLEAN_FALCON512_CLEAN_to_ntt_monty(h, 9);
-TODO: <== */
+        // TODO: PQCLEAN_FALCON512_CLEAN_to_ntt_monty(h, 9);
 
         ///////////////////////////////////////////////
         // Decode signature.
-        //fprintf(stdout, "INFO: do_verify() calling PQCLEAN_FALCON512_CLEAN_comp_decode()\n");
-/* TODO: ==>
-        sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(sig, 9, sigbuf, sigbuflen);
-TODO: <== */
-        if (sz2 != sigbuflen)
+        // TODO: sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(sig, 9, sigBuf, uint16(sigBufLen));
+        if (sz2 != uint16(sigBufLen))
         {
             return -6;
         }
@@ -1574,84 +1746,31 @@ TODO: <== */
         // Hash nonce + message into a vector.
         OQS_SHA3_shake256_inc_init();
         OQS_SHA3_shake256_inc_absorb(nonce, NONCELEN);
-        OQS_SHA3_shake256_inc_absorb(m, mlen);
+        OQS_SHA3_shake256_inc_absorb(msg, msgLen);
         OQS_SHA3_shake256_inc_finalize();
-/* TODO: ==>
-        PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(hm, 9, workingStorage);
-TODO: <== */
+        // TODO: PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(hm, 9, workingStorage);
         OQS_SHA3_shake256_inc_ctx_release();
+
+
+
+        // RULE: Message must have a length of more than zero
+        // RULE: Signature Validation should succeed if all fields are valid
 
         ///////////////////////////////////////////////
         // Verify signature.
-        //fprintf(stdout, "INFO: do_verify() calling PQCLEAN_FALCON512_CLEAN_verify_raw()\n");
-/* TODO: ==>
-        rc = PQCLEAN_FALCON512_CLEAN_verify_raw(hm, sig, h, 9, workingStorage);
-TODO: <== */
+        // TODO: rc = PQCLEAN_FALCON512_CLEAN_verify_raw(hm, sig, h, 9, workingStorage);
         if (rc == 0)
         {
             return -7;
         }
 
-        //fprintf(stdout, "INFO: do_verify() EXIT\n");
-        return 0;
+        return FALCON_ERR_SUCCESS;
     }
 
 
-    ////////////////////////////////////////
-    //
-    // int PQCLEAN_FALCON512_CLEAN_crypto_sign_verify(const uint8_t*  sig,
-    //                                                size_t          siglen,
-    //                                                const uint8_t*  m,
-    //                                                size_t          mlen,
-    //                                                const uint8_t*  pk)
-    ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_crypto_sign_verify ( bytes memory /* uint8_t* */ sig,
-                                                          uint16                      siglen,
-                                                          bytes memory /* uint8_t* */ /*m*/,
-                                                          uint16                      /*mlen*/,
-                                                          bytes memory /* uint8_t* */ /*pk*/     ) public pure  returns (int16)
-    {
-        if (siglen < 1 + NONCELEN) // 1 + 40
-        {
-            return -11;
-        }
 
-        if (uint8(sig[0]) != (0x30 + 9))
-        {
-            return -12;
-        }
 
-        uint ii;
-        uint sourceOffset;
-        uint8[NONCELEN]  memory nonce;
-        uint32 sigbuflen = siglen - 1 - NONCELEN;
-        //uint8[sigbuflen] storage sigbuf;
-        uint8[g_SIGBUFLEN] memory sigbuf;
-        int16 retval;
-
-        sourceOffset = 1;
-        for (ii=0; ii<NONCELEN; ii++)
-        {
-            nonce[ii] = uint8(sig[sourceOffset + ii]);
-        }
-
-        sourceOffset = 1 + NONCELEN;
-        for (ii=0; ii<sigbuflen; ii++)
-        {
-            sigbuf[ii] = uint8(sig[sourceOffset + ii]);
-        }
-
-        //fprintf(stdout, "INFO: PQCLEAN_FALCON512_CLEAN_crypto_sign_verify() Calling do_verify()\n");
-/* TODO: ==>
-        retval = do_verify(nonce, sigbuf, uint16(sigbuflen), m, mlen, pk);
-TODO: <== */
-
-        return retval;
-    }
 //}
 // ==== pqclean.c END =====================================================================================================================
 
-
 }
-
-
