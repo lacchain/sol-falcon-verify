@@ -24,14 +24,14 @@ contract Falcon
     int16 constant private FALCON_ERR_INTERNAL = -6;
 
     // Signature formats
-    uint8 constant private FALCON_SIG_INFERRED   = 0; // Signature format is inferred from the signature header byte; In this case, the signature is malleable (since a signature value can be transcoded to other formats).
-    uint8 constant private FALCON_SIG_COMPRESSED = 1; // Variable-size signature. This format produces the most compact signatures on average, but the signature size may vary depending on private key, signed data, and random seed.
-    uint8 constant private FALCON_SIG_PADDED     = 2; // Fixed-size signature. Same as compressed, but includes padding to a known fixed size (FALCON_SIG_PADDED_SIZE).
-                                                      // With this format, the signature generation loops until an appropriate signature size is achieved (such looping is uncommon) and adds the padding bytes;
-                                                      // the verification functions check the presence and contents of the padding bytes.
-    uint8 constant private FALCON_SIG_CT         = 3; // Fixed-size format amenable to constant-time implementation. All formats allow constant-time code with regard to the private key;
-                                                      // the 'CT' format also prevents information about the signature value and the signed data hash to leak through timing-based side channels (this feature is rarely needed).
-    uint8 constant private FALCON_SIG_INVALID    = 4;
+    uint8 constant private FALCON_SIG_0_INFERRED   = 0; // Signature format is inferred from the signature header byte; In this case, the signature is malleable (since a signature value can be transcoded to other formats).
+    uint8 constant private FALCON_SIG_1_COMPRESSED = 1; // Variable-size signature. This format produces the most compact signatures on average, but the signature size may vary depending on private key, signed data, and random seed.
+    uint8 constant private FALCON_SIG_2_PADDED     = 2; // Fixed-size signature. Same as compressed, but includes padding to a known fixed size (FALCON_SIG_PADDED_SIZE).
+                                                        // With this format, the signature generation loops until an appropriate signature size is achieved (such looping is uncommon) and adds the padding bytes;
+                                                        // the verification functions check the presence and contents of the padding bytes.
+    uint8 constant private FALCON_SIG_3_CT         = 3; // Fixed-size format amenable to constant-time implementation. All formats allow constant-time code with regard to the private key;
+                                                        // the 'CT' format also prevents information about the signature value and the signed data hash to leak through timing-based side channels (this feature is rarely needed).
+    uint8 constant private FALCON_SIG_4_INVALID    = 4;
 
 
     uint32 constant private SHAKE256_RATE = 136;  // The SHAKE-256 byte absorption rate (aka OQS_SHA3_SHAKE256_RATE)    // [4+2+2+2=10 bytes]
@@ -48,6 +48,18 @@ contract Falcon
     uint16 constant private NONCELEN = 40;
     uint32 constant private g_signatureLen = 658;
     uint32 constant private g_SIGBUFLEN = g_signatureLen - 1 - NONCELEN;
+
+    uint16[16] private FALCON_PUBKEY_SIZE            = [5,5,8,15,29,57,113,225,449,897,1793,3585,7169,14337,28673,57345];
+
+    // Maximum signature size (in bytes) when using the COMPRESSED format. In practice, the signature will be shorter.
+    //#define FALCON_SIG_COMPRESSED_MAXSIZE(logn) (((((11u << (logn)) + (101u >> (10 - (logn)))) + 7) >> 3) + 41)
+    // Signature size (in bytes) when using the PADDED format. The size is exact.
+    //#define FALCON_SIG_PADDED_SIZE(logn) (44u + 3 * (256u >> (10 - (logn))) + 2 * (128u >> (10 - (logn))) + 3 * (64u >> (10 - (logn))) + 2 * (16u >> (10 - (logn))) - 2 * (2u >> (10 - (logn))) - 8 * (1u >> (10 - (logn))))
+    // Signature size (in bytes) when using the CT format. The size is exact.
+    //#define FALCON_SIG_CT_SIZE(logn) ((3u << ((logn) - 1)) - ((logn) == 3) + 41)
+    uint16[16] private FALCON_SIG_COMPRESSED_MAXSIZE = [43,44,47,52,64,86,130,219,397,752,1462,2857,5673,11305,22569,45097];
+    uint16[16] private FALCON_SIG_PADDED_SIZE        = [44,44,47,52,63,82,122,200,356,666,1280,44,44,44,44,44];
+    uint16[16] private FALCON_SIG_CT_SIZE            = [41,44,47,52,65,89,137,233,425,809,1577,3113,6185,12329,24617,49193];
 
     // From: common.c
     uint16[11] /*constant*/ private overtab = [ 0, /* unused */ 65, 67, 71, 77, 86, 100, 122, 154, 205, 287 ]; // [11*2=22 bytes]
@@ -458,22 +470,6 @@ contract Falcon
     }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     ///////////////////////////////////////
     //
     ///////////////////////////////////////
@@ -512,22 +508,18 @@ contract Falcon
     }
 
 
-
-
-/*
-    function toBytes(address a) public pure returns (bytes memory b)
+    ///////////////////////////////////////
+    // Public key size (in bytes). The size is exact.
+    // #define FALCON_PUBKEY_SIZE(logn) (((logn) <= 1 ? 4u : (7u << ((logn) - 2))) + 1)
+    ///////////////////////////////////////
+    function falconPubkeySize(uint8 logn) private view returns (uint16)
     {
-        // From Dave
-        assembly
-        {
-            let m := mload(0x40)
-            a := and(a, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
-            mstore(add(m, 20), xor(0x140000000000000000000000000000000000000000, a))
-            mstore(0x40, add(m, 52))
-            b := m
-       }
+        if (logn > 15)
+            logn = 15;
+        //return (( ((uint16(logn))<=1) ? uint16(4) : (uint16(7) << ((logn)-2))) + 1);
+        return FALCON_PUBKEY_SIZE[logn];
     }
-*/
+
 
 // ==== sha3_c.c BEGIN =====================================================================================================================
 
@@ -1603,10 +1595,10 @@ TODO: <== */
         ///////////////////////////////////////////////
 
         // RULE: SignatureType must be in the range 0..3
-        if ((signatureType != FALCON_SIG_INFERRED) &&
-            (signatureType != FALCON_SIG_COMPRESSED) &&
-            (signatureType != FALCON_SIG_PADDED) &&
-            (signatureType != FALCON_SIG_CT))
+        if ((signatureType != FALCON_SIG_0_INFERRED) &&
+            (signatureType != FALCON_SIG_1_COMPRESSED) &&
+            (signatureType != FALCON_SIG_2_PADDED) &&
+            (signatureType != FALCON_SIG_3_CT))
         {
             return FALCON_ERR_BADARG + (-10);
         }
@@ -1614,7 +1606,7 @@ TODO: <== */
         // RULE: Signature must have a minimum length of 42 bytes
         if (sigLen <= 1 + NONCELEN) // 1 + 40
         {
-            return FALCON_ERR_FORMAT + (-10);
+            return FALCON_ERR_SIZE + (-20);
         }
 
         {
@@ -1624,55 +1616,34 @@ TODO: <== */
             uint8 sig_bits_0xx1 = (uint8(sig[0]) >> 4) & 0x09;
             if (sig_bits_0xx1 != 0x01)
             {
-                return FALCON_ERR_FORMAT + (-20);
+                return FALCON_ERR_FORMAT + (-30);
             }
             if (sig_bits_nnnn < 1 || sig_bits_nnnn > 10)
             {
-                return FALCON_ERR_FORMAT + (-20);
+                return FALCON_ERR_FORMAT + (-40);
             }
             // RULE: Signature Type (0cc1nnnn) must have a value (cc) of 0, 1, 2 or 3
             if (sig_bits_cc < 0 || sig_bits_cc > 3) // silly test, but anyway.
             {
-                return FALCON_ERR_FORMAT + (-20);
-            }
-        }
-
-        uint32 sigBufLen = sigLen - 1 - NONCELEN;
-        //uint8[sigBufLen] storage sigBuf;
-        uint8[] memory sigBuf = new uint8[](g_SIGBUFLEN); // uint8[g_SIGBUFLEN] memory sigBuf;
-        uint8[] memory nonce = new uint8[](NONCELEN); // uint8[NONCELEN] memory nonce;
-
-        if (sigBufLen == 0)
-        {
-            return FALCON_ERR_FORMAT + (-30);
-        }
-
-        {
-            uint ii;
-            uint sourceOffset = 1;
-            for (ii=0; ii<NONCELEN; ii++)
-            {
-                nonce[ii] = uint8(sig[sourceOffset + ii]);
+                return FALCON_ERR_FORMAT + (-50);
             }
 
-            sourceOffset = 1 + NONCELEN;
-            for (ii=0; ii<sigBufLen; ii++)
+            // RULE: Inferred Signature Type (0) must have the 1st nibble of the signature equal to 1 (0001)
+            // RULE: Compressed Signature Type (1) must have the 1st nibble of the signature equal to 3 (0011)
+            // RULE: Padded Signature Type (2) must have the 1st nibble of the signature equal to 5 (0101)
+            // RULE: Constant-Time Signature Type (3) must have the 1st nibble of the signature equal to 7 (0111)
+            if (sig_bits_cc != signatureType)
             {
-                sigBuf[ii] = uint8(sig[sourceOffset + ii]);
+                return FALCON_ERR_FORMAT + (-60);
             }
         }
 
         // RULE: Public Key must have length of more than zero
         if (pubKeyLen <= 0)
         {
-            return FALCON_ERR_FORMAT;
+            return FALCON_ERR_SIZE + (-70);
         }
 
-        // RULE: Public Key must have the correct length
-        if (pubKeyLen != 897)
-        {
-            return FALCON_ERR_FORMAT;
-        }
 
         {
             // First byte should have the form "0000nnnn"
@@ -1680,37 +1651,69 @@ TODO: <== */
             uint8 pubKey_bits_nnnn = uint8(pubKey[0]) & 0x0F;
             uint8 sig_bits_nnnn = uint8(sig[0]) & 0x0F;
 
+            // RULE: Public Key must have the correct length
+            //if (pubKeyLen != 897)
+            if (pubKeyLen != falconPubkeySize(pubKey_bits_nnnn) )
+            {
+                return FALCON_ERR_SIZE + (-80);
+            }
+
             // RULE: Public Key must have a 1st nibble value of 0
             if (pubkey_bits_0000 != 0x00)
             {
-                return FALCON_ERR_FORMAT;
+                return FALCON_ERR_FORMAT + (-90);
             }
 
             // RULE: Public Key must have a 2nd nibble value in the range 1 to 10
             if ((pubKey_bits_nnnn < 1) || (pubKey_bits_nnnn > 10))
             {
-                return FALCON_ERR_FORMAT;
+                return FALCON_ERR_FORMAT + (-100);
             }
 
             // RULE: Signature must have the same 2nd nibble as that of the public key
             if (pubKey_bits_nnnn != sig_bits_nnnn)
             {
-                return FALCON_ERR_BADARG;
+                return FALCON_ERR_BADARG + (-110);
+            }
+
+            // RULE: Inferred Signature Type (0) must have the correct signature length in the public key
+            // RULE: Padded Signature Type (2) must have the correct signature length in the public key
+            // RULE: Constant-Time Signature Type (3) must have the correct signature length in the public key
+            if ( ((signatureType == FALCON_SIG_1_COMPRESSED) && (sigLen > FALCON_SIG_COMPRESSED_MAXSIZE[pubKey_bits_nnnn])) ||
+                 ((signatureType == FALCON_SIG_2_PADDED    ) && (sigLen != FALCON_SIG_PADDED_SIZE      [pubKey_bits_nnnn])) ||
+                 ((signatureType == FALCON_SIG_3_CT        ) && (sigLen != FALCON_SIG_CT_SIZE          [pubKey_bits_nnnn])) )
+            {
+                return FALCON_ERR_SIZE + (-120);
+            }
+
+        }
+
+        uint32 sigDataLen = sigLen - 1 - NONCELEN;
+        //uint8[sigDataLen] storage sigData;
+        uint8[] memory sigData = new uint8[](g_SIGBUFLEN); // uint8[g_SIGBUFLEN] memory sigData;
+        uint8[] memory sigNonce = new uint8[](NONCELEN); // uint8[NONCELEN] memory sigNonce;
+
+        // Separate Nonce and Signature
+        {
+            uint ii;
+            uint sourceOffset = 1;
+            for (ii=0; ii<NONCELEN; ii++)
+            {
+                sigNonce[ii] = uint8(sig[sourceOffset + ii]);
+            }
+
+            sourceOffset = 1 + NONCELEN;
+            for (ii=0; ii<sigDataLen; ii++)
+            {
+                sigData[ii] = uint8(sig[sourceOffset + ii]);
             }
         }
 
-        // RULE: Inferred Signature Type (0) must have the 1st nibble of the signature equal to 1 (0001)
-        // RULE: Inferred Signature Type (0) must have the correct signature length in the public key
-        // RULE: Compressed Signature Type (1) must have the 1st nibble of the signature equal to 3 (0011)
-        // RULE: Padded Signature Type (2) must have the 1st nibble of the signature equal to 5 (0101)
-        // RULE: Padded Signature Type (2) must have the correct signature length in the public key
-        // RULE: Constant-Time Signature Type (3) must have the 1st nibble of the signature equal to 7 (0111)
-        // RULE: Constant-Time Signature Type (3) must have the correct signature length in the public key
 
         ////////////////////////////////////////
-        // static int do_verify(const uint8_t*  nonce,
-        //                      const uint8_t*  sigBuf,
-        //                      size_t          sigBufLen,
+        // static int do_verify(const uint8_t*  sigNonce,
+        //                      const uint8_t*  sigData,
+        //                      size_t          sigDataLen,
         //                      const uint8_t*  msg,
         //                      size_t          msgLen,
         //                      const uint8_t*  pubKey)
@@ -1729,23 +1732,23 @@ TODO: <== */
         // TODO: sz1 = PQCLEAN_FALCON512_CLEAN_modq_decode( h, 9, pubKey + 1, PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1);
         if (sz1 != PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1)
         {
-            return -1;
+            return FALCON_ERR_BADSIG + (-130);
         }
 
         // TODO: PQCLEAN_FALCON512_CLEAN_to_ntt_monty(h, 9);
 
         ///////////////////////////////////////////////
         // Decode signature.
-        // TODO: sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(sig, 9, sigBuf, uint16(sigBufLen));
-        if (sz2 != uint16(sigBufLen))
+        // TODO: sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(sig, 9, sigData, uint16(sigDataLen));
+        if (sz2 != uint16(sigDataLen))
         {
-            return -6;
+            return FALCON_ERR_BADSIG + (-140);
         }
 
         ///////////////////////////////////////////////
-        // Hash nonce + message into a vector.
+        // Hash Nonce + message into a vector.
         OQS_SHA3_shake256_inc_init();
-        OQS_SHA3_shake256_inc_absorb(nonce, NONCELEN);
+        OQS_SHA3_shake256_inc_absorb(sigNonce, NONCELEN);
         OQS_SHA3_shake256_inc_absorb(msg, msgLen);
         OQS_SHA3_shake256_inc_finalize();
         // TODO: PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(hm, 9, workingStorage);
@@ -1761,7 +1764,7 @@ TODO: <== */
         // TODO: rc = PQCLEAN_FALCON512_CLEAN_verify_raw(hm, sig, h, 9, workingStorage);
         if (rc == 0)
         {
-            return -7;
+            return FALCON_ERR_BADSIG + (-150);
         }
 
         return FALCON_ERR_SUCCESS;

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
-const falc = require('./falcon_constants.js');
+const falcConsts = require('./falcon_constants.js');
 const kestrelDataset = require('./falcon_dataset_from_kestrel.js');
 
-const Falcon = artifacts.require("Falcon");
+const falconContract = artifacts.require("Falcon");
+
 var assert = require('assert');
 
 function getReasonCode(ret)
@@ -22,6 +23,7 @@ function getReasonCode(ret)
     return quotient;
 }
 
+
 function getFalconReturnValue(ret)
 {
     var isNegative = false;
@@ -36,6 +38,7 @@ function getFalconReturnValue(ret)
     return remainder;
 }
 
+
 function numHex(s)
 {
     var a = s.toString(16).toUpperCase();
@@ -45,6 +48,7 @@ function numHex(s)
     }
     return a;
 }
+
 
 function strHex(s)
 {
@@ -56,174 +60,291 @@ function strHex(s)
 
     return a;
 }
+
+
 contract("Falcon", accounts =>
 {
-    let falcon;
+    let falcon1;
 
     before(async () =>
     {
-        falcon = await Falcon.deployed();
+        falcon1 = await falconContract.deployed();
     });
 
-    it("has EIP-152 enabled", async () =>
+    //it("has EIP-152 enabled", async () =>
+    //{
+    //    // from https://eips.ethereum.org/EIPS/eip-152#test-vector-4
+    //    let ret = await web3.eth.call(
+    //    {
+    //        from: accounts[0],
+    //        to: '0x0000000000000000000000000000000000000009',
+    //        data: '0x0000000048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001'
+    //    });
+    //    assert.equal(ret, '0x08c9bcf367e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d282e6ad7f520e511f6c3e2b8c68059b9442be0454267ce079217e1319cde05b')
+    //});
+
+    describe("Interaction", async () =>
     {
-        // from https://eips.ethereum.org/EIPS/eip-152#test-vector-4
-        let ret = await web3.eth.call(
+        it("must be possible using hardcoded arrays", async () =>
         {
-            from: accounts[0],
-            to: '0x0000000000000000000000000000000000000009',
-            data: '0x0000000048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001'
-        });
-        assert.equal(ret, '0x08c9bcf367e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d282e6ad7f520e511f6c3e2b8c68059b9442be0454267ce079217e1319cde05b')
-    });
+            //let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
+            //let signatureLen = 3;
+            //let signature = [1,2,3];
+            //let messageLen = 3;
+            //let message = [1,2,3];
+            //let pubKeyLen = 3;
+            //let pubKey = [1,2,3];
+            let expectedRet = falcConsts.FALCON_ERR_SIZE;
 
+            //let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let verifyArgs = [0, [1,2,3], 3, [1,2,3], 3, [1,2,3], 3];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let errorReasonCode = getReasonCode(ret);
+            ret = getFalconReturnValue(ret);
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            if (ret != expectedRet) console.log(errorStr);
+            assert.equal(ret, expectedRet, errorStr);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            assert.equal(tx.receipt.status, true);
+        });
+
+        it("must be possible using malloc'd arrays", async () =>
+        {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
+            let signatureLen = 42;
+            let signature = Buffer.alloc(signatureLen);
+            let messageLen = 1;
+            let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 0;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_FORMAT;
+
+            //signature.write('11', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            //pubKey.write('01', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
+
+            const signature_array = signature.toJSON().data;  // new Uint8Array(signature);
+            const message_array   = message.toJSON().data;    // new Uint8Array(message);
+            const pubKey_array    = pubKey.toJSON().data;     // new Uint8Array(pubKey);
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let errorReasonCode = getReasonCode(ret);
+            ret = getFalconReturnValue(ret);
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            if (ret != expectedRet) console.log(errorStr);
+            assert.equal(ret, expectedRet, errorStr);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            assert.equal(tx.receipt.status, true);
+        });
+    });
+    
     describe("Public Key", async () =>
     {
         it("must have length of more than zero", async () =>
         {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_INFERRED;
-            let pubKeyLen = 0;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            let pubKeyLen = 0;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_SIZE;
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            // logn: nnnn = log of degree, 9 for Falcon-512, 10 for Falcon-1024
+            signature.write('19', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            //pubKey.write('09', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
+
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
         it("must have a 1st nibble value of 0", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_INFERRED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 5;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_FORMAT;
 
-            pubKey.write('B0', 0, pubKeyLen, 'hex');
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('11', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            pubKey.write('B1', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
         it("must have a 2nd nibble value in the range 1 to 10", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_INFERRED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 1;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_FORMAT;
 
-            pubKey.write('0B', 0, pubKeyLen, 'hex'); // If logn = 1, then pubkey size is expected to be 5 bytes (see fn pubKeySize())
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('1B', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            pubKey.write('0B', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
         it("must have the correct length", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_1_COMPRESSED;
             let signatureLen = 44;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_COMPRESSED;
-            let pubKeyLen = 4;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 4;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_SIZE;
 
-            signature.write('31', 0, 1, 'hex');
-            pubKey.write('01', 0, 1, 'hex'); // 1 means pub key size of 5 bytes  (TODO: Writing only 1 byte into a 4 byte buffer)
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('31', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            pubKey.write('01', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
-
-    })
+    });
 
     describe("Signature", async() =>
     {
-        it("must have a minimum length of 42 bytes", async () =>
+    	
+    	it("must have a SignatureType in the range 0..3", async () =>
         {
-            let signatureLen = 0;
+            let signatureType = falcConsts.FALCON_SIG_4_INVALID;
+            let signatureLen = 44;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_INFERRED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 1;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_BADARG;
 
-            //pubKey.write('0B', 0, pubKeyLen, 'hex'); // TODO: pubKey is not being initialised
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('71', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            pubKey.write('01', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            assert.equal(tx.receipt.status, true);
+        });
+
+        it("must have a minimum length of 42 bytes", async () =>
+        {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
+            let signatureLen = 41;
+            let signature = Buffer.alloc(signatureLen);
+            let messageLen = 1;
+            let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 1;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_SIZE;
+
+            signature.write('11', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            pubKey.write('01', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
+
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let errorReasonCode = getReasonCode(ret);
+            ret = getFalconReturnValue(ret);
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            if (ret != expectedRet) console.log(errorStr);
+            assert.equal(ret, expectedRet, errorStr);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
         it("must have the same 2nd nibble as that of the public key", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_INFERRED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 5;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_BADARG;
 
-            signature.write('0A', 0, 1, 'hex');
-            pubKey.write('09', 0, pubKeyLen, 'hex');
-            let expectedRet = falc.FALCON_ERR_BADSIG; // TODO: Check if falc.FALCON_ERR_BADSIG is the correct return code for this. I believe it is also a falc.FALCON_ERR_FORMAT issue.
+            signature.write('12', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            pubKey.write('01', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -231,30 +352,34 @@ contract("Falcon", accounts =>
     describe("Signature Type (0cc1nnnn)", async() =>
     {
         // NB This test cannot fail: by definition, two consecutive bits will always represent a value of 0, 1, 2 or 3
-        // i.e. falc.FALCON_SIG_INFERRED (0), falc.FALCON_SIG_COMPRESSED (1), falc.FALCON_SIG_PADDED (2), falc.FALCON_SIG_CT (3)
+        // i.e. falcConsts.FALCON_SIG_0_INFERRED (0), falcConsts.FALCON_SIG_1_COMPRESSED (1), falcConsts.FALCON_SIG_2_PADDED (2), falcConsts.FALCON_SIG_3_CT (3)
         // Valid values of 0cc1 are : 0001, 0011, 0101, 0111 = 1, 3, 5, 7
         it("must have a value (cc) of 0, 1, 2 or 3", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_INVALID;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 5;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_FORMAT;
 
-            signature.write('0A', 0, 1, 'hex');
-            pubKey.write('0A', 0, pubKeyLen, 'hex');
-            let expectedRet = falc.FALCON_ERR_BADARG;
+            signature.write('41', 0, 1, 'hex');  // First byte should have the form "0cc1nnnn"
+            pubKey.write('01', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -263,51 +388,59 @@ contract("Falcon", accounts =>
     {
         it("must have the 1st nibble of the signature equal to 1 (0001)", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_INFERRED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 5;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_FORMAT;
 
-            signature.write('0A', 0, 1, 'hex'); // Happy first nibble is b0001, so we'll put b0000 to force BADSIG
-            pubKey.write('0A', 0, pubKeyLen, 'hex');
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('21', 0, 1, 'hex'); // Happy first nibble is b0001, so we'll put b0000 to force BADSIG
+            pubKey.write('01', 0, 1, 'hex'); // If logn=1, then pubkey size is expected to be 5 bytes (see FALCON_PUBKEY_SIZE). For Falcon512, logn=9 yielding pubkeysize of 897 bytes.
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
         it("must have the correct signature length in the public key", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_INFERRED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 1;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_SIZE;
 
-            signature.write('11', 0, 1, 'hex'); // Happy first nibble is b0001. We'll keep this.
-            pubKey.write('01', 0, pubKeyLen, 'hex'); // 1 means signature size of 44 bytes
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('11', 0, 1, 'hex'); // Set the value of the 1st byte
+            pubKey.write('01', 0, 1, 'hex'); // 1 means signature size of 44 bytes
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -316,26 +449,30 @@ contract("Falcon", accounts =>
     {
         it("must have the 1st nibble of the signature equal to 3 (0011)", async() =>
         {
-            let signatureLen = 44;
+            let signatureType = falcConsts.FALCON_SIG_1_COMPRESSED;
+            let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_COMPRESSED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 5;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_FORMAT;
 
-            signature.write('21', 0, 1, 'hex');
-            pubKey.write('01', 0, pubKeyLen, 'hex');
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('51', 0, 1, 'hex');
+            pubKey.write('01', 0, 1, 'hex'); // 1 means signature size of 44 bytes
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
         // We cannot make any assumptions about the length of an unpadded compressed signature
@@ -345,51 +482,59 @@ contract("Falcon", accounts =>
     {
         it("must have the 1st nibble of the signature equal to 5 (0101)", async() =>
         {
-            let signatureLen = 44;
+            let signatureType = falcConsts.FALCON_SIG_2_PADDED;
+            let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_PADDED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 5;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_FORMAT;
 
-            signature.write('21', 0, 1, 'hex');
-            pubKey.write('01', 0, pubKeyLen, 'hex');
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('31', 0, 1, 'hex');
+            pubKey.write('01', 0, 1, 'hex'); // 1 means signature size of 44 bytes
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
         it("must have the correct signature length in the public key", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_2_PADDED;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_PADDED;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 1;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_SIZE;
 
-            signature.write('31', 0, 1, 'hex');
-            pubKey.write('01', 0, pubKeyLen, 'hex'); // 1 means signature size of 44 bytes
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('51', 0, 1, 'hex'); // Set the value of the 1st byte
+            pubKey.write('01', 0, 1, 'hex'); // 1 means signature size of 44 bytes
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -398,80 +543,181 @@ contract("Falcon", accounts =>
     {
         it("must have the 1st nibble of the signature equal to 7 (0111)", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_3_CT;
             let signatureLen = 44;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_CT;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 5;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_FORMAT;
 
-            signature.write('41', 0, 1, 'hex');
-            pubKey.write('01', 0, pubKeyLen, 'hex'); // 1 means signature size of 44 bytes
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('51', 0, 1, 'hex');
+            pubKey.write('01', 0, 1, 'hex'); // 1 means signature size of 44 bytes
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
         it("must have the correct signature length in the public key", async() =>
         {
+            let signatureType = falcConsts.FALCON_SIG_3_CT;
             let signatureLen = 42;
             let signature = Buffer.alloc(signatureLen);
-            let signatureType = falc.FALCON_SIG_CT;
-            let pubKeyLen = 1;
-            let pubKey = Buffer.alloc(pubKeyLen);
             let messageLen = 1;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 1;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_SIZE;
 
-            signature.write('51', 0, 1, 'hex');     // Set the value of the 1st byte
-            pubKey.write('01', 0, pubKeyLen, 'hex'); // First byte of 0x01 inicates a signature size of 44 bytes
-            let expectedRet = falc.FALCON_ERR_FORMAT;
+            signature.write('71', 0, 1, 'hex'); // Set the value of the 1st byte
+            pubKey.write('01', 0, 1, 'hex'); // 1 means signature size of 44 bytes
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            assert.equal(tx.receipt.status, true);
+        });
+    });
+
+    describe("Message", async() =>
+    {
+        it("must have a length of more than zero", async() =>
+        {
+            let signatureType = falcConsts.FALCON_SIG_1_COMPRESSED;
+            let signatureLen = 44;
+            let signature = Buffer.alloc(signatureLen);
+            let messageLen = 0;
+            let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 1;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_SIZE;
+
+            signature.write('31', 0, 1, 'hex');     // Set the value of the 1st byte
+            pubKey.write('01', 0, 1, 'hex'); // 1 means signature size of 44 bytes
+
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let errorReasonCode = getReasonCode(ret);
+            ret = getFalconReturnValue(ret);
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            if (ret != expectedRet) console.log(errorStr);
+            assert.equal(ret, expectedRet, errorStr);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
 
     describe("Signature Validation", async() =>
     {
-        it("should fail if message length is zero", async() =>
+        it("must fail with invalid data", async () =>
         {
-            let signatureType = falc.FALCON_SIG_COMPRESSED;
-            let signatureLen = kestrelDataset.signatureLen;
-            let pubKeyLen = kestrelDataset.pubKeyLen;
-            let messageLen = 0;
-
+            let signatureType = falcConsts.FALCON_SIG_0_INFERRED;
+            let signatureLen = 658;
             let signature = Buffer.alloc(signatureLen);
-            let pubKey = Buffer.alloc(pubKeyLen);
+            let messageLen = 100;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 897;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_BADSIG;
 
-            signature.write(kestrelDataset.signature, 0, signatureLen, 'hex');
-            pubKey.write(kestrelDataset.pubKey, 0, pubKeyLen, 'hex');
-            let expectedRet = falc.FALCON_ERR_BADARG;
+            if (1)
+            {
+                signature.write(
+                '1955555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '555555555555555555555555555555555555', 0, signatureLen, 'hex');
+                pubKey.write(
+                '0955555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '55', 0, pubKeyLen, 'hex');
+                message.write(
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '5555555555555555555555555555555555555555555555555555555555555555' +
+                '55555555', 0, messageLen, 'hex');
+            }
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
+
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -480,31 +726,29 @@ contract("Falcon", accounts =>
         ///////////////////////////////////////////////////////////
         it("should succeed if all fields are valid", async() =>
         {
-            let signatureType = falc.FALCON_SIG_COMPRESSED;
-            //let signatureLen = kestrelDataset.signatureLen;
-            //let pubKeyLen = kestrelDataset.pubKeyLen;
-            //let messageLen = kestrelDataset.messageLen;
-            let signatureLen = 658;
-            let pubKeyLen = 897;
-            let messageLen = 100;
-
+            let signatureType = falcConsts.FALCON_SIG_1_COMPRESSED;
+            let signatureLen = 658; // kestrelDataset.signatureLen;
             let signature = Buffer.alloc(signatureLen);
-            let pubKey = Buffer.alloc(pubKeyLen);
+            let messageLen = 100;   // kestrelDataset.messageLen;
             let message = Buffer.alloc(messageLen);
+            let pubKeyLen = 897;    // kestrelDataset.pubKeyLen;
+            let pubKey = Buffer.alloc(pubKeyLen);
+            let expectedRet = falcConsts.FALCON_ERR_SUCCESS;
 
             console.log("signatureLen=" + signatureLen);
-            console.log("pubKeyLen=" + pubKeyLen);
             console.log("messageLen=" + messageLen);
+            console.log("pubKeyLen=" + pubKeyLen);
 
             if (0)
             {
                 signature.write(kestrelDataset.signatureInHex, 0, signatureLen, 'hex');
-                pubKey.write   (kestrelDataset.pubKeyInHex, 0, pubKeyLen   , 'hex');
                 message.write  (kestrelDataset.messageInHex  , 0, messageLen  , 'hex');
+                pubKey.write(kestrelDataset.pubKeyInHex, 0, pubKeyLen   , 'hex');
             }
             if (1)
             {
-                signature.write('390191EF48486EB9D9A6823D8E6FF0D7F4DF8BED13AF7FA55A7E8DFA0D197258' +
+                signature.write(
+                '390191EF48486EB9D9A6823D8E6FF0D7F4DF8BED13AF7FA55A7E8DFA0D197258' +
                 '42A5451BCF4C061982D021C63A7D666C2024FE57033B1A1BDA8C2179C518C94D' +
                 '434947EACC109EFE792857FF6450CC853E8BB9D5D951B3DDB1397FADC2210762' +
                 'B479E386E660A68EB2AD034A58A3D0CCE2370EDF257FF4F81FE97C9BB10C1A96' +
@@ -525,7 +769,13 @@ contract("Falcon", accounts =>
                 'A65227D1E57AB6C5DF11A369645DAC717AB671A4C10AEF72824134D0E68676BB' +
                 '138CA20EB5E08A0D1F90EE48AF1CCE1F21C72394AC427F382CED545183689CDB' +
                 '72CEC8EA30C77389A16204356259E4B1142D', 0, signatureLen, 'hex');
-                pubKey.write   ('09B7107F987F937EA7566BCA38E1578B8D0B59294E68BD208BFA90133101F5EF' +
+                message.write(
+                '486C8E99DE7F81A3B0F4610BB555BE687D67E079F5B03EE9D18C21D766FE3D2D' +
+                '36EA378A89294F839DC9BCD9A8251F92CFD39AACC1E228F44442E95B3C59EF90' +
+                '4613ECE9D312028B07A3CB26B3C9844DCDB2699299D7D47FD63F7889D6C5CE34' +
+                '626B583A', 0, messageLen  , 'hex');
+                pubKey.write(
+                '09B7107F987F937EA7566BCA38E1578B8D0B59294E68BD208BFA90133101F5EF' +
                 'D8755E9F1FD20564762585BAA5A4F165EBEC6DF80AB5248A22BBA940A7754ABE' +
                 '5329B5C60345F395AD2A33AC106E65F14B91D0DCA308AE4CC6DB5FE69EEE9FE4' +
                 'A392FF64F52865070EB5587E7F83AB6C187CC0584B3552920A3D4B50AB0A4A1E' +
@@ -554,10 +804,6 @@ contract("Falcon", accounts =>
                 'EB3AB7B6A0F66B0F65597A7FB6F5C1A9B1459D48885DB3734ABEC9918C0F3A81' +
                 '35BBB2279984A054115E9C12A8F10CA25B93BE8A3ACFB94DC6A90D4DA0E0A7AD' +
                 'A8', 0, pubKeyLen   , 'hex');
-                message.write  ('486C8E99DE7F81A3B0F4610BB555BE687D67E079F5B03EE9D18C21D766FE3D2D' +
-                '36EA378A89294F839DC9BCD9A8251F92CFD39AACC1E228F44442E95B3C59EF90' +
-                '4613ECE9D312028B07A3CB26B3C9844DCDB2699299D7D47FD63F7889D6C5CE34' +
-                '626B583A', 0, messageLen  , 'hex');
             }
 
             console.log("signature[0..8]=" + strHex(signature.toString('ascii',0,8)) );
@@ -567,8 +813,8 @@ contract("Falcon", accounts =>
                                            + strHex(signature.toString('ascii',3,4))
                                            );
             console.log("signature[0..8]=" + signature.toString('HEX',0,8).toUpperCase() );
-            console.log("pubKey[0..8]   =" + pubKey.toString('hex',0,8).toUpperCase() );
             console.log("message[0..8]  =" + message.toString('hex',0,8).toUpperCase() );
+            console.log("pubKey[0..8]   =" + pubKey.toString('hex',0,8).toUpperCase() );
 
             if (0)
             {
@@ -576,30 +822,32 @@ contract("Falcon", accounts =>
                 let stateVar2 = 77;
                 console.log('stateVar1=' + stateVar1 + ', stateVar2=' + stateVar2);
                 let setSateVarsArgs = [stateVar1, stateVar2];
-                await falcon.setSateVars.call.apply(null, setSateVarsArgs);
+                await falcon1.setSateVars.call.apply(null, setSateVarsArgs);
             }
 
-            let expectedRet = falc.FALCON_ERR_SUCCESS;
+            const signature_array = signature.toJSON().data;
+            const message_array   = message.toJSON().data;
+            const pubKey_array    = pubKey.toJSON().data;
 
-            let verifyArgs = [signature, signatureType, pubKey, message];
-            let ret = await falcon.verify.call.apply(null, verifyArgs);
+            let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
+            let ret = await falcon1.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falc.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falc.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet)
             {
                 console.log(errorStr);
             }
 
-            if (1)
-            {
-                let stateVar1 = await falcon.getStateVar1.call.apply(null, null);
-                let stateVar2 = await falcon.getStateVar2.call.apply(null, null);
-                console.log('stateVar1=' + stateVar1 + ', stateVar2=' + stateVar2);
-            }
+            //if (1)
+            //{
+            //    let stateVar1 = await falcon1.getStateVar1.call.apply(null, null);
+            //    let stateVar2 = await falcon1.getStateVar2.call.apply(null, null);
+            //    console.log('stateVar1=' + stateVar1 + ', stateVar2=' + stateVar2);
+            //}
 
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
