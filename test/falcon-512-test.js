@@ -735,9 +735,9 @@ contract("Falcon", accounts =>
             let pubKey = Buffer.alloc(pubKeyLen);
             let expectedRet = falcConsts.FALCON_ERR_SUCCESS;
 
-            console.log("signatureLen=" + signatureLen);
-            console.log("messageLen=" + messageLen);
-            console.log("pubKeyLen=" + pubKeyLen);
+            //console.log("signatureLen=" + signatureLen);
+            //console.log("messageLen=" + messageLen);
+            //console.log("pubKeyLen=" + pubKeyLen);
 
             if (0)
             {
@@ -806,24 +806,15 @@ contract("Falcon", accounts =>
                 'A8', 0, pubKeyLen   , 'hex');
             }
 
-            console.log("signature[0..8]=" + strHex(signature.toString('ascii',0,8)) );
-            console.log("signature[0..8]=" + strHex(signature.toString('ascii',0,1))
-                                           + strHex(signature.toString('ascii',1,2))
-                                           + strHex(signature.toString('ascii',2,3))
-                                           + strHex(signature.toString('ascii',3,4))
-                                           );
-            console.log("signature[0..8]=" + signature.toString('HEX',0,8).toUpperCase() );
-            console.log("message[0..8]  =" + message.toString('hex',0,8).toUpperCase() );
-            console.log("pubKey[0..8]   =" + pubKey.toString('hex',0,8).toUpperCase() );
-
-            if (0)
-            {
-                let stateVar1 = 55;
-                let stateVar2 = 77;
-                console.log('stateVar1=' + stateVar1 + ', stateVar2=' + stateVar2);
-                let setSateVarsArgs = [stateVar1, stateVar2];
-                await falcon1.setSateVars.call.apply(null, setSateVarsArgs);
-            }
+            //console.log("signature[0..8]=" + strHex(signature.toString('ascii',0,8)) );
+            //console.log("signature[0..8]=" + strHex(signature.toString('ascii',0,1))
+            //                               + strHex(signature.toString('ascii',1,2))
+            //                               + strHex(signature.toString('ascii',2,3))
+            //                               + strHex(signature.toString('ascii',3,4))
+            //                               );
+            //console.log("signature[0..8]=" + signature.toString('HEX',0,8).toUpperCase() );
+            //console.log("message[0..8]  =" + message.toString('hex',0,8).toUpperCase() );
+            //console.log("pubKey[0..8]   =" + pubKey.toString('hex',0,8).toUpperCase() );
 
             const signature_array = signature.toJSON().data;
             const message_array   = message.toJSON().data;

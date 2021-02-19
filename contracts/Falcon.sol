@@ -22,6 +22,7 @@ contract Falcon
     int16 constant private FALCON_ERR_BADSIG   = -4;
     int16 constant private FALCON_ERR_BADARG   = -5;
     int16 constant private FALCON_ERR_INTERNAL = -6;
+    int16 constant private FALCON_ERR_UNDEFINED = -99;
 
     // Signature formats
     uint8 constant private FALCON_SIG_0_INFERRED   = 0; // Signature format is inferred from the signature header byte; In this case, the signature is malleable (since a signature value can be transcoded to other formats).
@@ -419,12 +420,6 @@ contract Falcon
     // --------------------------------------------------------------------
 
 
-    //uint8[2*512] private stackvar_doverify_workingStorage; // array of 1024 bytes     // uint8[2*512]
-    //uint8[2*512]  private stackvar_doverify_h;                                         // uint16[512]
-    //uint8[2*512]  private stackvar_doverify_hm;                                        // uint16[512]
-    //int8[2*512]   private stackvar_doverify_sig;                                       // int16[512]
-
-
     // ***************************************************************************
     // ** IMPLEMENTATION: Utility functions
     // ***************************************************************************
@@ -437,108 +432,6 @@ contract Falcon
     {
         return (((a) << (offset)) ^ ((a) >> (64 - (offset))));
     }
-
-
-    ///////////////////////////////////////
-    //
-    ///////////////////////////////////////
-    function byte_array_uint16_get(bytes memory bytearray, uint32 wordindex) private pure returns (uint16 result16)
-    {
-        // If the array was an array of uint16 values:
-        //     result16 = wordarray[wordindex];
-        // TODO: Check me, incl endianess
-        result16 = uint16((uint8(bytearray[wordindex*2]) << 8) | uint8(bytearray[wordindex*2+1]));
-    }
-
-
-    ///////////////////////////////////////
-    //
-    ///////////////////////////////////////
-    function byte_array_uint16_set(bytes memory bytearray, uint32 wordindex, uint16 value16) private pure
-    {
-        // If the array was an array of uint16 values:
-        //     wordarray[wordindex] = value16;
-        // TODO: Check me, incl endianess
-        bytearray[wordindex*2  ] = bytes1(uint8(uint16(value16) >> 8    ));
-        bytearray[wordindex*2+1] = bytes1(uint8(uint16(value16) & 0x00FF));
-    }
-
-
-    ///////////////////////////////////////
-    //
-    ///////////////////////////////////////
-    function byte_array_int16_set(bytes memory bytearray, uint32 wordindex, int16 value16) private pure
-    {
-        // If the array was an array of uint16 values:
-        //     wordarray[wordindex] = value16;
-        // TODO: Check me, incl endianess and sign
-        bytearray[wordindex*2  ] = bytes1(uint8(int16(value16) >> 8    ));
-        bytearray[wordindex*2+1] = bytes1(uint8(int16(value16) & 0x00FF));
-    }
-
-
-    ///////////////////////////////////////
-    //
-    ///////////////////////////////////////
-    function uint8_array_uint16_get(uint8[] memory bytearray, uint32 wordindex) private pure returns (uint16 result16)
-    {
-        // If the array was an array of uint16 values:
-        //     result16 = wordarray[wordindex];
-        // TODO: Check me, incl endianess
-        result16 = uint16((uint8(bytearray[wordindex*2]) << 8) | uint8(bytearray[wordindex*2+1]));
-    }
-
-
-    ///////////////////////////////////////
-    //
-    ///////////////////////////////////////
-    function uint8_array_uint16_set(uint8[] memory bytearray, uint32 wordindex, uint16 value16) private pure
-    {
-        // If the array was an array of uint16 values:
-        //     wordarray[wordindex] = value16;
-        // TODO: Check me, incl endianess
-        bytearray[wordindex*2  ] = uint8(uint16(value16) >> 8    );
-        bytearray[wordindex*2+1] = uint8(uint16(value16) & 0x00FF);
-    }
-
-
-    ///////////////////////////////////////
-    //
-    ///////////////////////////////////////
-    function uint8_array_int16_set(uint8[] memory bytearray, uint32 wordindex, int16 value16) private pure
-    {
-        // If the array was an array of uint16 values:
-        //     wordarray[wordindex] = value16;
-        // TODO: Check me, incl endianess and sign
-        bytearray[wordindex*2  ] = uint8(int16(value16) >> 8    );
-        bytearray[wordindex*2+1] = uint8(int16(value16) & 0x00FF);
-    }
-
-
-    ///////////////////////////////////////
-    //
-    ///////////////////////////////////////
-    function int8_array_int16_set(int8[] memory bytearray, uint32 wordindex, int16 value16) private pure
-    {
-        // If the array was an array of uint16 values:
-        //     wordarray[wordindex] = value16;
-        // TODO: Check me, incl endianess and sign
-        bytearray[wordindex*2  ] = int8(int16(value16) >> 8    );
-        bytearray[wordindex*2+1] = int8(int16(value16) & 0x00FF);
-    }
-
-
-    ///////////////////////////////////////
-    //
-    ///////////////////////////////////////
-    function int8_array_uint16_get(int8[] memory bytearray, uint32 wordindex) private pure returns (uint16 result16)
-    {
-        // If the array was an array of uint16 values:
-        //     result16 = wordarray[wordindex];
-        // TODO: Check me, incl endianess
-        result16 = uint16((uint8(bytearray[wordindex*2]) << 8) | uint8(bytearray[wordindex*2+1]));
-    }
-
 
     ///////////////////////////////////////
     // Public key size (in bytes). The size is exact.
@@ -553,694 +446,12 @@ contract Falcon
     }
 
 
-// ==== sha3_c.c BEGIN =====================================================================================================================
-
-////////////////////////////////////////
-// A) The following code was imported from "fips202.c"
-// Based on the public domain implementation in
-// crypto_hash/keccakc512/simple/ from http://bench.cr.yp.to/supercop.html
-// by Ronny Van Keer
-// and the public domain "TweetFips202" implementation
-// from https://twitter.com/tweetfips202
-// by Gilles Van Assche, Daniel J. Bernstein, and Peter Schwabe
-// License: Public domain
-//
-// B) SHAKE256_RATE constant from...
-// file: sha3_c.c
-// brief: Implementation of the OQS SHA3 API via the files fips202.c
-// from: PQClean (https://github.com/PQClean/PQClean/tree/master/common)
-// License: MIT
-////////////////////////////////////////
-
-    // ***************************************************************************
-    // ** Implementation: Keccak
-    // ***************************************************************************
-
-    ////////////////////////////////////////
-    // KeccakF1600_StatePermute()
-    // Input parameters supplied in member variable shake256_context64.
-    // Output values are written to the same member variable.
-    ////////////////////////////////////////
-    function KeccakF1600_StatePermute() public payable
-    {
-        //fprintf(stdout, "TRACE: KeccakF1600_StatePermute()\n");
-        int         round;
-
-        // copyFromState(A, state)
-        Aba = shake256_context64[ 0]; Abe = shake256_context64[ 1]; Abi = shake256_context64[ 2]; Abo = shake256_context64[ 3]; Abu = shake256_context64[ 4];
-        Aga = shake256_context64[ 5]; Age = shake256_context64[ 6]; Agi = shake256_context64[ 7]; Ago = shake256_context64[ 8]; Agu = shake256_context64[ 9];
-        Aka = shake256_context64[10]; Ake = shake256_context64[11]; Aki = shake256_context64[12]; Ako = shake256_context64[13]; Aku = shake256_context64[14];
-        Ama = shake256_context64[15]; Ame = shake256_context64[16]; Ami = shake256_context64[17]; Amo = shake256_context64[18]; Amu = shake256_context64[19];
-        Asa = shake256_context64[20]; Ase = shake256_context64[21]; Asi = shake256_context64[22]; Aso = shake256_context64[23]; Asu = shake256_context64[24];
-
-        for (round = 0; round < NROUNDS; round += 2)
-        {
-            // PrepareTheta
-            BCa = Aba ^ Aga ^ Aka ^ Ama ^ Asa;
-            BCe = Abe ^ Age ^ Ake ^ Ame ^ Ase;
-            BCi = Abi ^ Agi ^ Aki ^ Ami ^ Asi;
-            BCo = Abo ^ Ago ^ Ako ^ Amo ^ Aso;
-            BCu = Abu ^ Agu ^ Aku ^ Amu ^ Asu;
-
-            // thetaRhoPiChiIotaPrepareTheta(round  , A, E)
-            Da = BCu ^ ROL(BCe, 1);
-            De = BCa ^ ROL(BCi, 1);
-            Di = BCe ^ ROL(BCo, 1);
-            Do = BCi ^ ROL(BCu, 1);
-            Du = BCo ^ ROL(BCa, 1);
-            Aba ^= Da;
-            BCa = Aba;
-            Age ^= De;
-            BCe = ROL(Age, 44);
-            Aki ^= Di;
-            BCi = ROL(Aki, 43);
-            Amo ^= Do;
-            BCo = ROL(Amo, 21);
-            Asu ^= Du;
-            BCu = ROL(Asu, 14);
-            Eba = BCa ^ ((~BCe) & BCi);
-            Eba ^= KeccakF_RoundConstants[uint256(round)];
-            Ebe = BCe ^ ((~BCi) & BCo);
-            Ebi = BCi ^ ((~BCo) & BCu);
-            Ebo = BCo ^ ((~BCu) & BCa);
-            Ebu = BCu ^ ((~BCa) & BCe);
-            Abo ^= Do;
-            BCa = ROL(Abo, 28);
-            Agu ^= Du;
-            BCe = ROL(Agu, 20);
-            Aka ^= Da;
-            BCi = ROL(Aka, 3);
-            Ame ^= De;
-            BCo = ROL(Ame, 45);
-            Asi ^= Di;
-            BCu = ROL(Asi, 61);
-            Ega = BCa ^ ((~BCe) & BCi);
-            Ege = BCe ^ ((~BCi) & BCo);
-            Egi = BCi ^ ((~BCo) & BCu);
-            Ego = BCo ^ ((~BCu) & BCa);
-            Egu = BCu ^ ((~BCa) & BCe);
-            Abe ^= De;
-            BCa = ROL(Abe, 1);
-            Agi ^= Di;
-            BCe = ROL(Agi, 6);
-            Ako ^= Do;
-            BCi = ROL(Ako, 25);
-            Amu ^= Du;
-            BCo = ROL(Amu, 8);
-            Asa ^= Da;
-            BCu = ROL(Asa, 18);
-            Eka = BCa ^ ((~BCe) & BCi);
-            Eke = BCe ^ ((~BCi) & BCo);
-            Eki = BCi ^ ((~BCo) & BCu);
-            Eko = BCo ^ ((~BCu) & BCa);
-            Eku = BCu ^ ((~BCa) & BCe);
-            Abu ^= Du;
-            BCa = ROL(Abu, 27);
-            Aga ^= Da;
-            BCe = ROL(Aga, 36);
-            Ake ^= De;
-            BCi = ROL(Ake, 10);
-            Ami ^= Di;
-            BCo = ROL(Ami, 15);
-            Aso ^= Do;
-            BCu = ROL(Aso, 56);
-            Ema = BCa ^ ((~BCe) & BCi);
-            Eme = BCe ^ ((~BCi) & BCo);
-            Emi = BCi ^ ((~BCo) & BCu);
-            Emo = BCo ^ ((~BCu) & BCa);
-            Emu = BCu ^ ((~BCa) & BCe);
-            Abi ^= Di;
-            BCa = ROL(Abi, 62);
-            Ago ^= Do;
-            BCe = ROL(Ago, 55);
-            Aku ^= Du;
-            BCi = ROL(Aku, 39);
-            Ama ^= Da;
-            BCo = ROL(Ama, 41);
-            Ase ^= De;
-            BCu = ROL(Ase, 2);
-            Esa = BCa ^ ((~BCe) & BCi);
-            Ese = BCe ^ ((~BCi) & BCo);
-            Esi = BCi ^ ((~BCo) & BCu);
-            Eso = BCo ^ ((~BCu) & BCa);
-            Esu = BCu ^ ((~BCa) & BCe);
-
-            //    prepareTheta
-            BCa = Eba ^ Ega ^ Eka ^ Ema ^ Esa;
-            BCe = Ebe ^ Ege ^ Eke ^ Eme ^ Ese;
-            BCi = Ebi ^ Egi ^ Eki ^ Emi ^ Esi;
-            BCo = Ebo ^ Ego ^ Eko ^ Emo ^ Eso;
-            BCu = Ebu ^ Egu ^ Eku ^ Emu ^ Esu;
-
-            // thetaRhoPiChiIotaPrepareTheta(round+1, E, A)
-            Da = BCu ^ ROL(BCe, 1);
-            De = BCa ^ ROL(BCi, 1);
-            Di = BCe ^ ROL(BCo, 1);
-            Do = BCi ^ ROL(BCu, 1);
-            Du = BCo ^ ROL(BCa, 1);
-            Eba ^= Da;
-            BCa = Eba;
-            Ege ^= De;
-            BCe = ROL(Ege, 44);
-            Eki ^= Di;
-            BCi = ROL(Eki, 43);
-            Emo ^= Do;
-            BCo = ROL(Emo, 21);
-            Esu ^= Du;
-            BCu = ROL(Esu, 14);
-            Aba = BCa ^ ((~BCe) & BCi);
-            Aba ^= KeccakF_RoundConstants[uint256(round + 1)];
-            Abe = BCe ^ ((~BCi) & BCo);
-            Abi = BCi ^ ((~BCo) & BCu);
-            Abo = BCo ^ ((~BCu) & BCa);
-            Abu = BCu ^ ((~BCa) & BCe);
-            Ebo ^= Do;
-            BCa = ROL(Ebo, 28);
-            Egu ^= Du;
-            BCe = ROL(Egu, 20);
-            Eka ^= Da;
-            BCi = ROL(Eka, 3);
-            Eme ^= De;
-            BCo = ROL(Eme, 45);
-            Esi ^= Di;
-            BCu = ROL(Esi, 61);
-            Aga = BCa ^ ((~BCe) & BCi);
-            Age = BCe ^ ((~BCi) & BCo);
-            Agi = BCi ^ ((~BCo) & BCu);
-            Ago = BCo ^ ((~BCu) & BCa);
-            Agu = BCu ^ ((~BCa) & BCe);
-            Ebe ^= De;
-            BCa = ROL(Ebe, 1);
-            Egi ^= Di;
-            BCe = ROL(Egi, 6);
-            Eko ^= Do;
-            BCi = ROL(Eko, 25);
-            Emu ^= Du;
-            BCo = ROL(Emu, 8);
-            Esa ^= Da;
-            BCu = ROL(Esa, 18);
-            Aka = BCa ^ ((~BCe) & BCi);
-            Ake = BCe ^ ((~BCi) & BCo);
-            Aki = BCi ^ ((~BCo) & BCu);
-            Ako = BCo ^ ((~BCu) & BCa);
-            Aku = BCu ^ ((~BCa) & BCe);
-            Ebu ^= Du;
-            BCa = ROL(Ebu, 27);
-            Ega ^= Da;
-            BCe = ROL(Ega, 36);
-            Eke ^= De;
-            BCi = ROL(Eke, 10);
-            Emi ^= Di;
-            BCo = ROL(Emi, 15);
-            Eso ^= Do;
-            BCu = ROL(Eso, 56);
-            Ama = BCa ^ ((~BCe) & BCi);
-            Ame = BCe ^ ((~BCi) & BCo);
-            Ami = BCi ^ ((~BCo) & BCu);
-            Amo = BCo ^ ((~BCu) & BCa);
-            Amu = BCu ^ ((~BCa) & BCe);
-            Ebi ^= Di;
-            BCa = ROL(Ebi, 62);
-            Ego ^= Do;
-            BCe = ROL(Ego, 55);
-            Eku ^= Du;
-            BCi = ROL(Eku, 39);
-            Ema ^= Da;
-            BCo = ROL(Ema, 41);
-            Ese ^= De;
-            BCu = ROL(Ese, 2);
-            Asa = BCa ^ ((~BCe) & BCi);
-            Ase = BCe ^ ((~BCi) & BCo);
-            Asi = BCi ^ ((~BCo) & BCu);
-            Aso = BCo ^ ((~BCu) & BCa);
-            Asu = BCu ^ ((~BCa) & BCe);
-        }
-
-        // copyToState(state, A)
-        shake256_context64[ 0] = Aba; shake256_context64[ 1] = Abe; shake256_context64[ 2] = Abi; shake256_context64[ 3] = Abo; shake256_context64[ 4] = Abu;
-        shake256_context64[ 5] = Aga; shake256_context64[ 6] = Age; shake256_context64[ 7] = Agi; shake256_context64[ 8] = Ago; shake256_context64[ 9] = Agu;
-        shake256_context64[10] = Aka; shake256_context64[11] = Ake; shake256_context64[12] = Aki; shake256_context64[13] = Ako; shake256_context64[14] = Aku;
-        shake256_context64[15] = Ama; shake256_context64[16] = Ame; shake256_context64[17] = Ami; shake256_context64[18] = Amo; shake256_context64[19] = Amu;
-        shake256_context64[20] = Asa; shake256_context64[21] = Ase; shake256_context64[22] = Asi; shake256_context64[23] = Aso; shake256_context64[24] = Asu;
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function keccak_inc_init() public payable
-    {
-        uint32  i;
-
-        //fprintf(stdout, "TRACE: keccak_inc_init()\n");
-        for (i = 0; i < 25; ++i)
-        {
-            shake256_context64[i] = 0;
-        }
-        shake256_context64[25] = 0;
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function keccak_inc_absorb(uint32 r, uint8[] memory _msg, uint32 msgLen) public payable
-    {
-        uint32  i;
-        uint32  msg_offset;
-
-        msg_offset = 0;
-        while (msgLen + shake256_context64[25] >= r)
-        {
-            for (i = 0; i < r - uint32(shake256_context64[25]); i++)
-            {
-                ///////////////////////////////////////////////////////////////////////////
-                //uint64 x = shake256_context64[(shake256_context64[25] + i) >> 3];
-                //uint64 y5 = shake256_context64[25] + i;
-                //uint64 y6 = y5 & 0x07;
-                //uint64 y7 = 8 * y6;
-                //uint8  y8 = uint8(_msg[i]);
-                //uint64 y9 = uint64(y8);
-                //uint64 y = y9 << y7;
-                //
-                //x ^= y;
-                ///////////////////////////////////////////////////////////////////////////
-
-                shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(_msg[msg_offset+i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
-            }
-            msgLen -= uint32(r - shake256_context64[25]);
-            msg_offset = msg_offset + uint32(r - shake256_context64[25]);  //_msg += (r - shake256_context64[25]);
-            shake256_context64[25] = 0;
-
-            // Input parameters supplied in member variable shake256_context64.
-            // Output values are written to the same member variable.
-            KeccakF1600_StatePermute();
-        }
-
-        for (i = 0; i < msgLen; i++)
-        {
-            shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(_msg[msg_offset+i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
-        }
-        shake256_context64[25] += msgLen;
-
-    }
-
-    /*************************************************
-     * Name:        keccak_inc_finalize
-     *
-     * Description: Finalizes Keccak absorb phase, prepares for squeezing
-     *
-     * Arguments:   - uint32 r     : rate in bytes (e.g., 168 for SHAKE128)
-     *              - uint8 p      : domain-separation byte for different Keccak-derived functions
-     **************************************************/
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function keccak_inc_finalize(uint32 r, uint8 p) public payable
-    {
-        //fprintf(stdout, "TRACE: keccak_inc_finalize()\n");
-        shake256_context64[shake256_context64[25] >> 3] ^= uint64(p) << (8 * (shake256_context64[25] & 0x07));
-        shake256_context64[(r - 1) >> 3] ^= (uint64(128) << (8 * ((r - 1) & 0x07)));
-        shake256_context64[25] = 0;
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function keccak_inc_squeeze(/*uint8* h, */ uint32 outlen, uint32 r) private pure returns (bytes memory h)
-    {
-        //fprintf(stdout, "TRACE: keccak_inc_squeeze()\n");
-/* TODO: ==>
-        uint32  i;
-
-        for (i = 0; i < outlen && i < shake256_context64[25]; i++)
-        {
-            h[i] = uint8(shake256_context64[(r - shake256_context64[25] + i) >> 3] >> (8 * ((r - shake256_context64[25] + i) & 0x07)));
-        }
-
-        h += i;
-        outlen -= i;
-        shake256_context64[25] -= i;
-
-        while (outlen > 0)
-        {
-            // Input parameters supplied in member variable shake256_context64.
-            // Output values are written to the same member variable.
-            KeccakF1600_StatePermute(shake256_context64);
-            for (i = 0; i < outlen && i < r; i++)
-            {
-                h[i] = uint8(shake256_context64[i >> 3] >> (8 * (i & 0x07)));
-            }
-
-            h += i;
-            outlen -= i;
-            shake256_context64[25] = r - i;
-        }
-
-        r = r;
-        for (i = 0; i < outlen; i++)
-        {
-            h[i] = 0xAA;
-        }
-TODO: <== */
-    }
-
-    ///////////////////////////////////////
-    // Implementation: OQS_SHA3_shake256_inc
-    ///////////////////////////////////////
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function OQS_SHA3_shake256_inc_init() public payable
-    {
-        int16 ii;
-        //fprintf(stdout, "TRACE: OQS_SHA3_shake256_inc_init()\n");
-        for (ii=0; ii < CTX_ELEMENTS; ii++)
-            shake256_context64[uint256(ii)] = 0;
-        keccak_inc_init();
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function OQS_SHA3_shake256_inc_absorb(uint8[] memory input, uint32 inlen) public payable
-    {
-        //fprintf(stdout, "TRACE: OQS_SHA3_shake256_inc_absorb()\n");
-        keccak_inc_absorb(SHAKE256_RATE, input, inlen);
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function OQS_SHA3_shake256_inc_finalize() public payable
-    {
-        //fprintf(stdout, "TRACE: OQS_SHA3_shake256_inc_finalize()\n");
-        keccak_inc_finalize(SHAKE256_RATE, 0x1F);
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function OQS_SHA3_shake256_inc_squeeze(/*uint8* output,*/ uint32 outlen) public pure returns (bytes memory output)
-    {
-        //fprintf(stdout, "TRACE: OQS_SHA3_shake256_inc_squeeze()\n");
-        output = keccak_inc_squeeze(outlen, SHAKE256_RATE);
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function OQS_SHA3_shake256_inc_ctx_release() public payable
-    {
-        int16 ii;
-        //fprintf(stdout, "TRACE: OQS_SHA3_shake256_inc_ctx_release()\n");
-        // Blat over any sensitive data
-        for (ii=0; ii < CTX_ELEMENTS; ii++)
-            shake256_context64[uint256(ii)] = 0;
-    }
-
-//}
-// ==== sha3_c.c END =====================================================================================================================
-// ==== common.c BEGIN =====================================================================================================================
-
-//contract lib_falcon_common
-//{
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(uint8[] memory /*uint16**/ x, uint32 logn, uint8[] memory /* uint8 * */ workingStorage) public view
-    {
-        uint32 n;
-        uint32 n2;
-        uint32 u;
-        uint32 _msg;
-        uint32 p;
-        uint32 over;
-        //bytes memory /* uint16* */ tt1;
-        uint16[63] memory tt2;
-
-        //fprintf(stdout, "INFO: PQCLEAN_FALCON512_CLEAN_hash_to_point_ct() ENTRY\n");
-
-        n = uint32(1) << logn;
-        n2 = n << 1;
-        over = overtab[logn];
-        _msg = n + over;
-        // tt1 = (uint16 *)workingStorage;
-        for (u = 0; u < _msg; u++)
-        {
-            uint8[2] memory buf;
-            uint32    w;
-            uint32    wr;
-
-            OQS_SHA3_shake256_inc_squeeze(/*buf,*/ 2 /*sizeof(buf)*/);
-            w = (uint32(buf[0]) << 8) | uint32(buf[1]);
-            wr = w - (uint32(24578) & (((w - 24578) >> 31) - 1));
-            wr = wr - (uint32(24578) & (((wr - 24578) >> 31) - 1));
-            wr = wr - (uint32(12289) & (((wr - 12289) >> 31) - 1));
-            wr |= ((w - 61445) >> 31) - 1;
-            if (u < n)
-            {
-                uint8_array_uint16_set(x,u,uint16(wr));  //x[u] = uint16(wr);
-            }
-            else if (u < n2)
-            {
-                uint8_array_uint16_set(workingStorage, (u-n), uint16(wr));  //tt1[u - n] = uint16(wr);
-            }
-            else
-            {
-                tt2[u - n2] = uint16(wr);
-            }
-        }
-
-        for (p = 1; p <= over; p <<= 1)
-        {
-            uint32 v;
-
-            v = 0;
-            for (u = 0; u < _msg; u++)
-            {
-/* TODO: ==>
-                uint16 *s;
-                uint16 *d;
-                uint32  j;
-                uint32  sv;
-                uint32  dv;
-                uint32  mk;
-
-                if (u < n)
-                {
-                    s = &x[u];
-                }
-                else if (u < n2)
-                {
-                    s = &tt1[u - n];
-                }
-                else
-                {
-                    s = &tt2[u - n2];
-                }
-
-                sv = *s;
-                j = u - v;
-                mk = (sv >> 15) - 1U;
-                v -= mk;
-                if (u < p)
-                {
-                    continue;
-                }
-
-                if ((u - p) < n)
-                {
-                    d = &x[u - p];
-                }
-                else if ((u - p) < n2)
-                {
-                    d = &tt1[(u - p) - n];
-                }
-                else
-                {
-                    d = &tt2[(u - p) - n2];
-                }
-
-                dv = *d;
-
-                mk &= -(((j & p) + 0x01FF) >> 9);
-                *s = uint16(sv ^ (mk & (sv ^ dv)));
-                *d = uint16(dv ^ (mk & (sv ^ dv)));
-TODO: <== */
-            }
-        }
-        //fprintf(stdout, "INFO: PQCLEAN_FALCON512_CLEAN_hash_to_point_ct() EXIT\n");
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_is_short(uint8[] memory /* const int16_t * */ s1, int8[] memory /* const int16_t* */ s2, uint32 logn) public pure returns (int16)
-    {
-        uint32 n;
-        uint32 u;
-        uint32 s;
-        uint32 ng;
-
-        n = uint32(1) << logn;
-        s = 0;
-        ng = 0;
-        for (u = 0; u < n; u++)
-        {
-            uint16 z;
-
-            z = uint8_array_uint16_get(s1,u);  //z = s1[u];
-            s += uint32(z * z);
-            ng |= s;
-
-            z = int8_array_uint16_get(s2,u);  //z = s2[u];
-            s += uint32(z * z);
-            ng |= s;
-        }
-
-        s |= -(ng >> 31);
-
-        //return s < ((uint32(7085) * uint32(12289)) >> (10 - logn));
-        uint32 val = ((uint32(7085) * uint32(12289)) >> (10 - logn));
-        if (s < val)
-           return 1;
-        return 0;
-    }
-//}
-// ==== common.c END =====================================================================================================================
-// ==== codec.c BEGIN =====================================================================================================================
-
-//library lib_falcon_codec
-//{
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_modq_decode(uint8[] memory /*uint16 **/ x, uint16 logn, uint8[] memory /*const void**/ In, uint16 In_offset, uint16 max_In_len)  public pure returns (uint16)
-    {
-        uint16        n;
-        uint16        In_len;
-        uint16        u;
-        //uint8 *       buf;
-        uint16        buf_ndx;
-        uint16        acc;
-        uint16        acc_len;
-
-        n = uint16(1) << logn;
-        In_len = ((n * 14) + 7) >> 3;
-        if (In_len > max_In_len)
-        {
-            return 0;
-        }
-
-        //buf = In;
-        buf_ndx = 0;
-        acc     = 0;
-        acc_len = 0;
-        u       = 0;
-
-        while (u < n)
-        {
-            acc = (acc << 8) | uint16(uint8(In[In_offset + buf_ndx++]));   // acc = (acc << 8) | (*buf++);
-            acc_len += 8;
-            if (acc_len >= 14)
-            {
-                uint16 w;
-
-                acc_len -= 14;
-                w = (acc >> acc_len) & 0x3FFF;
-                if (w >= 12289)
-                {
-                    return 0;
-                }
-                uint8_array_uint16_set(x,u, uint16(w)); //x[u++] = uint16(w);
-                u++;
-            }
-        }
-
-        if ((acc & ((uint32(1) << acc_len) - 1)) != 0)
-        {
-            return 0;
-        }
-
-        return In_len;
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_comp_decode(int8[] memory /*int16_t**/ x, uint16 logn, uint8[] memory /*const void**/ In, uint16 max_In_len) public pure returns (uint16)
-    {
-        //const uint8 *buf;
-        uint16  buf_ndx;
-        uint16  n;
-        uint16  u;
-        uint16  v;
-        uint16  acc;
-        uint    acc_len;
-
-        n = uint16(1) << logn;
-        //buf = In;
-        buf_ndx = 0;
-        acc = 0;
-        acc_len = 0;
-        v = 0;
-        for (u = 0; u < n; u++)
-        {
-            uint b;
-            uint s;
-            uint m;
-
-            if (v >= max_In_len)
-            {
-                return 0;
-            }
-
-            acc = (acc << 8) | uint16(uint8(In[buf_ndx++])); // acc = (acc << 8) | uint32(buf[v++]);
-            b = acc >> acc_len;
-            s = b & 128;
-            m = b & 127;
-
-            for (;;)
-            {
-                if (acc_len == 0)
-                {
-                    if (v >= max_In_len)
-                    {
-                        return 0;
-                    }
-                    acc = (acc << 8) | uint16(uint8(In[buf_ndx++])); // acc = (acc << 8) | uint32(buf[v++]);
-                    acc_len = 8;
-                }
-
-                acc_len--;
-                if (((acc >> acc_len) & 1) != 0)
-                {
-                    break;
-                }
-
-                m += 128;
-                if (m > 2047)
-                {
-                    return 0;
-                }
-            }
-            int16 val = int16((s!=0) ? -int(m) : int(m));
-            int8_array_int16_set(x,u,val); // x[u] = int16(s ? -int(m) : int(m));
-        }
-        return v;
-    }
-//}
-// ==== codec.c END =====================================================================================================================
 // ==== vrfy.c BEGIN =====================================================================================================================
 
-//import "lib_falcon_common.sol";
-//import "lib_falcon_vrfy_constants.sol";
+    //////////////////////////////////////////////////////////////////
+    // Functions that do arithmetic on scalars
+    //////////////////////////////////////////////////////////////////
 
-//import GMb from "lib_falcon_vrfy_constants.sol";
-
-//library lib_falcon_vrfy
-//{
     ////////////////////////////////////////
     // Addition modulo q. Operands must be in the 0..q-1 range.
     ////////////////////////////////////////
@@ -1350,10 +561,18 @@ TODO: <== */
         return mq_montymul(y18, x);
     }
 
+
+    // ------------------------------------------------------------------------------------------------------------------------
+    //////////////////////////////////////////////////////////////////
+    // Functions that do arithmetic on an arrays
+    //////////////////////////////////////////////////////////////////
+
+
     ////////////////////////////////////////
     // Compute NTT on a ring element.
+    // JG: Number-theoretic transform
     ////////////////////////////////////////
-    function mq_NTT(uint8[] memory /*uint16**/ a, uint32 logn) private view
+    function mq_NTT(uint16[] memory pWordArray, uint32 logn) private view
     {
         uint32  n;
         uint32  t;
@@ -1381,17 +600,11 @@ TODO: <== */
                 {
                     uint32 u;
                     uint32 v;
-                    uint32 tmp32;
-                    uint16 tmp16;
 
-                    u = uint8_array_uint16_get(a,j); // u = a[j];
-                    tmp32 = uint8_array_uint16_get(a,j + ht); // tmp = a[j + ht];
-                    v = mq_montymul(tmp32, s);               // v = mq_montymul(a[j + ht], s);
-
-                    tmp16 = uint16(mq_add(u, v));
-                    uint8_array_uint16_set(a,j   ,tmp16); // a[j]      = uint16(mq_add(u, v));
-                    tmp16 = uint16(mq_sub(u, v));
-                    uint8_array_uint16_set(a,j+ht,tmp16); // a[j + ht] = uint16(mq_sub(u, v));
+                    u = pWordArray[j];
+                    v = mq_montymul(pWordArray[j + ht], s);
+                    pWordArray[j]      = uint16(mq_add(u, v));
+                    pWordArray[j + ht] = uint16(mq_sub(u, v));
                 }
                 j1 += t;
             }
@@ -1403,7 +616,7 @@ TODO: <== */
     ////////////////////////////////////////
     // Compute the inverse NTT on a ring element, binary case.
     ////////////////////////////////////////
-    function mq_iNTT(uint8[] memory /*uint16**/ a, uint32 logn) public payable
+    function mq_iNTT(uint16[] memory pWordArray, uint32 logn) public payable
     {
         stackvar_mq_iNTT_n = uint32(1) << logn;
         stackvar_mq_iNTT_t = 1;
@@ -1431,16 +644,13 @@ TODO: <== */
                     uint32 u;
                     uint32 v;
                     uint32 w;
-                    uint16 tmp16;
 
-                    u = uint8_array_uint16_get(a,j  ); // u = a[j];
-                    v = uint8_array_uint16_get(a,j+stackvar_mq_iNTT_t); // v = a[j + t];
-                    tmp16 = uint16(mq_add(u, v));
-                    uint8_array_uint16_set(a,j,tmp16); // a[j] = uint16(mq_add(u, v));
+                    u = pWordArray[j];
+                    v = pWordArray[j + stackvar_mq_iNTT_t];
+                    pWordArray[j] = uint16(mq_add(u, v));
 
                     w = mq_sub(u, v);
-                    tmp16 = uint16(mq_montymul(w, s));
-                    uint8_array_uint16_set(a,j+stackvar_mq_iNTT_t,tmp16); // a[j + t] = uint16(mq_montymul(w, s));
+                    pWordArray[j + stackvar_mq_iNTT_t] = uint16(mq_montymul(w, s));
                 }
                 j1 += dt;
             }
@@ -1457,16 +667,14 @@ TODO: <== */
 
         for (stackvar_mq_iNTT_m = 0; stackvar_mq_iNTT_m < stackvar_mq_iNTT_n; stackvar_mq_iNTT_m++)
         {
-            uint16 tmp1 = uint8_array_uint16_get(a, stackvar_mq_iNTT_m); // a[m];
-            uint16 tmp2 = uint16(mq_montymul(tmp1, stackvar_mq_iNTT_ni));
-            uint8_array_uint16_set(a,stackvar_mq_iNTT_m,tmp2); // a[j + t] = uint16(mq_montymul(w, s));
+            pWordArray[stackvar_mq_iNTT_m] = uint16(mq_montymul(pWordArray[stackvar_mq_iNTT_m], stackvar_mq_iNTT_ni));
         }
     }
 
     ////////////////////////////////////////
     // Convert a polynomial (mod q) to Montgomery representation.
     ////////////////////////////////////////
-    function mq_poly_tomonty(uint8[] memory /*uint16**/ f, uint32 logn) private pure
+    function mq_poly_tomonty(uint16[] memory pWordArray, uint32 logn) private pure
     {
         uint32  u;
         uint32  n;
@@ -1474,9 +682,7 @@ TODO: <== */
         n = uint32(1) << logn;
         for (u = 0; u < n; u++)
         {
-            uint16 tmp1 = uint8_array_uint16_get(f,u); // f[u];
-            uint16 tmp2 = uint16(mq_montymul(tmp1, R2));
-            uint8_array_uint16_set(f,u,tmp2); // f[u] = uint16(mq_montymul(f[u], R2));
+            pWordArray[u] = uint16(mq_montymul(pWordArray[u], R2));
         }
     }
 
@@ -1484,7 +690,7 @@ TODO: <== */
     // Multiply two polynomials together (NTT representation, and using
     // a Montgomery multiplication). Result f*g is written over f.
     ////////////////////////////////////////
-    function mq_poly_montymul_ntt(uint8[] memory /*uint16**/ f, uint8[] memory /*uint16**/ g, uint32 logn) private pure
+    function mq_poly_montymul_ntt(uint16[] memory pWordArrayF, uint16[] memory pWordArrayG, uint32 logn) private pure
     {
         uint32  u;
         uint32  n;
@@ -1492,17 +698,14 @@ TODO: <== */
         n = uint32(1) << logn;
         for (u = 0; u < n; u++)
         {
-            uint16 tmp1 = uint8_array_uint16_get(f,u);
-            uint16 tmp2 = uint8_array_uint16_get(g,u);
-            uint16 tmp16 = uint16(mq_montymul(tmp1, tmp2));
-            uint8_array_uint16_set(f,u,tmp16); // f[u] = uint16(mq_montymul(f[u], g[u]));
+            pWordArrayF[u] = uint16(mq_montymul(pWordArrayF[u], pWordArrayG[u]));
         }
     }
 
     ////////////////////////////////////////
     // Subtract polynomial g from polynomial f.
     ////////////////////////////////////////
-    function mq_poly_sub(uint8[] memory /*uint16**/ f, uint8[] memory /*uint16**/ g, uint32 logn) private pure
+    function mq_poly_sub(uint16[] memory pWordArrayF, uint16[] memory pWordArrayG, uint32 logn) private pure
     {
         uint32  u;
         uint32  n;
@@ -1510,11 +713,7 @@ TODO: <== */
         n = uint32(1) << logn;
         for (u = 0; u < n; u++)
         {
-            uint16 tmp1 = uint8_array_uint16_get(f,u);
-            uint16 tmp2 = uint8_array_uint16_get(g,u);
-            uint16 tmp16 = uint16(mq_sub(tmp1, tmp2));
-            uint8_array_uint16_set(f,u,tmp16); // f[u] = uint16(mq_sub(f[u], g[u]));
-
+            pWordArrayF[u] = uint16(mq_sub(pWordArrayF[u], pWordArrayG[u]));
         }
     }
 
@@ -1523,105 +722,733 @@ TODO: <== */
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_to_ntt_monty(uint8[] memory /*uint16**/ h, uint32 logn) public view
+    function PQCLEAN_FALCON512_CLEAN_to_ntt_monty(uint16[] memory pWordArray, uint32 logn) public view
     {
-        //fprintf(stdout, "INFO: PQCLEAN_FALCON512_CLEAN_to_ntt_monty() ENTRY\n");
-        mq_NTT(h, logn);
-        mq_poly_tomonty(h, logn);
+        mq_NTT(pWordArray, logn);
+        mq_poly_tomonty(pWordArray, logn);
     }
 
+
+
+// ==== sha3_c.c BEGIN =====================================================================================================================
+
+    // ***************************************************************************
+    // ** Implementation: Keccak
+    // ***************************************************************************
+
+    ////////////////////////////////////////
+    // KeccakF1600_StatePermute()
+    // Input parameters supplied in member variable shake256_context64.
+    // Output values are written to the same member variable.
+    ////////////////////////////////////////
+    function KeccakF1600_StatePermute() public payable
+    {
+        int         round;
+
+        // copyFromState(A, state)
+        Aba = shake256_context64[ 0]; Abe = shake256_context64[ 1]; Abi = shake256_context64[ 2]; Abo = shake256_context64[ 3]; Abu = shake256_context64[ 4];
+        Aga = shake256_context64[ 5]; Age = shake256_context64[ 6]; Agi = shake256_context64[ 7]; Ago = shake256_context64[ 8]; Agu = shake256_context64[ 9];
+        Aka = shake256_context64[10]; Ake = shake256_context64[11]; Aki = shake256_context64[12]; Ako = shake256_context64[13]; Aku = shake256_context64[14];
+        Ama = shake256_context64[15]; Ame = shake256_context64[16]; Ami = shake256_context64[17]; Amo = shake256_context64[18]; Amu = shake256_context64[19];
+        Asa = shake256_context64[20]; Ase = shake256_context64[21]; Asi = shake256_context64[22]; Aso = shake256_context64[23]; Asu = shake256_context64[24];
+
+        for (round = 0; round < NROUNDS; round += 2)
+        {
+            //////////////////////////////////////////////////
+            // prepareTheta
+            BCa = Aba ^ Aga ^ Aka ^ Ama ^ Asa;
+            BCe = Abe ^ Age ^ Ake ^ Ame ^ Ase;
+            BCi = Abi ^ Agi ^ Aki ^ Ami ^ Asi;
+            BCo = Abo ^ Ago ^ Ako ^ Amo ^ Aso;
+            BCu = Abu ^ Agu ^ Aku ^ Amu ^ Asu;
+
+            //////////////////////////////////////////////////
+            // thetaRhoPiChiIotaPrepareTheta(round  , A, E)
+            Da = BCu ^ ROL(BCe, 1);
+            De = BCa ^ ROL(BCi, 1);
+            Di = BCe ^ ROL(BCo, 1);
+            Do = BCi ^ ROL(BCu, 1);
+            Du = BCo ^ ROL(BCa, 1);
+            Aba ^= Da;
+            BCa = Aba;
+
+            Age ^= De;
+            BCe = ROL(Age, 44);
+            Aki ^= Di;
+            BCi = ROL(Aki, 43);
+            Amo ^= Do;
+            BCo = ROL(Amo, 21);
+            Asu ^= Du;
+            BCu = ROL(Asu, 14);
+            Eba = BCa ^ ((~BCe) & BCi);
+            Eba ^= KeccakF_RoundConstants[uint256(round)];
+            Ebe = BCe ^ ((~BCi) & BCo);
+            Ebi = BCi ^ ((~BCo) & BCu);
+            Ebo = BCo ^ ((~BCu) & BCa);
+            Ebu = BCu ^ ((~BCa) & BCe);
+
+            Abo ^= Do;
+            BCa = ROL(Abo, 28);
+            Agu ^= Du;
+            BCe = ROL(Agu, 20);
+            Aka ^= Da;
+            BCi = ROL(Aka, 3);
+            Ame ^= De;
+            BCo = ROL(Ame, 45);
+            Asi ^= Di;
+            BCu = ROL(Asi, 61);
+            Ega = BCa ^ ((~BCe) & BCi);
+            Ege = BCe ^ ((~BCi) & BCo);
+            Egi = BCi ^ ((~BCo) & BCu);
+            Ego = BCo ^ ((~BCu) & BCa);
+            Egu = BCu ^ ((~BCa) & BCe);
+
+            Abe ^= De;
+            BCa = ROL(Abe, 1);
+            Agi ^= Di;
+            BCe = ROL(Agi, 6);
+            Ako ^= Do;
+            BCi = ROL(Ako, 25);
+            Amu ^= Du;
+            BCo = ROL(Amu, 8);
+            Asa ^= Da;
+            BCu = ROL(Asa, 18);
+            Eka = BCa ^ ((~BCe) & BCi);
+            Eke = BCe ^ ((~BCi) & BCo);
+            Eki = BCi ^ ((~BCo) & BCu);
+            Eko = BCo ^ ((~BCu) & BCa);
+            Eku = BCu ^ ((~BCa) & BCe);
+
+            Abu ^= Du;
+            BCa = ROL(Abu, 27);
+            Aga ^= Da;
+            BCe = ROL(Aga, 36);
+            Ake ^= De;
+            BCi = ROL(Ake, 10);
+            Ami ^= Di;
+            BCo = ROL(Ami, 15);
+            Aso ^= Do;
+            BCu = ROL(Aso, 56);
+            Ema = BCa ^ ((~BCe) & BCi);
+            Eme = BCe ^ ((~BCi) & BCo);
+            Emi = BCi ^ ((~BCo) & BCu);
+            Emo = BCo ^ ((~BCu) & BCa);
+            Emu = BCu ^ ((~BCa) & BCe);
+
+            Abi ^= Di;
+            BCa = ROL(Abi, 62);
+            Ago ^= Do;
+            BCe = ROL(Ago, 55);
+            Aku ^= Du;
+            BCi = ROL(Aku, 39);
+            Ama ^= Da;
+            BCo = ROL(Ama, 41);
+            Ase ^= De;
+            BCu = ROL(Ase, 2);
+            Esa = BCa ^ ((~BCe) & BCi);
+            Ese = BCe ^ ((~BCi) & BCo);
+            Esi = BCi ^ ((~BCo) & BCu);
+            Eso = BCo ^ ((~BCu) & BCa);
+            Esu = BCu ^ ((~BCa) & BCe);
+
+            //////////////////////////////////////////////////
+            // prepareTheta
+            BCa = Eba ^ Ega ^ Eka ^ Ema ^ Esa;
+            BCe = Ebe ^ Ege ^ Eke ^ Eme ^ Ese;
+            BCi = Ebi ^ Egi ^ Eki ^ Emi ^ Esi;
+            BCo = Ebo ^ Ego ^ Eko ^ Emo ^ Eso;
+            BCu = Ebu ^ Egu ^ Eku ^ Emu ^ Esu;
+
+            //////////////////////////////////////////////////
+            // thetaRhoPiChiIotaPrepareTheta(round+1, E, A)
+            Da = BCu ^ ROL(BCe, 1);
+            De = BCa ^ ROL(BCi, 1);
+            Di = BCe ^ ROL(BCo, 1);
+            Do = BCi ^ ROL(BCu, 1);
+            Du = BCo ^ ROL(BCa, 1);
+            Eba ^= Da;
+            BCa = Eba;
+
+            Ege ^= De;
+            BCe = ROL(Ege, 44);
+            Eki ^= Di;
+            BCi = ROL(Eki, 43);
+            Emo ^= Do;
+            BCo = ROL(Emo, 21);
+            Esu ^= Du;
+            BCu = ROL(Esu, 14);
+            Aba = BCa ^ ((~BCe) & BCi);
+            Aba ^= KeccakF_RoundConstants[uint256(round + 1)];
+            Abe = BCe ^ ((~BCi) & BCo);
+            Abi = BCi ^ ((~BCo) & BCu);
+            Abo = BCo ^ ((~BCu) & BCa);
+            Abu = BCu ^ ((~BCa) & BCe);
+
+            Ebo ^= Do;
+            BCa = ROL(Ebo, 28);
+            Egu ^= Du;
+            BCe = ROL(Egu, 20);
+            Eka ^= Da;
+            BCi = ROL(Eka, 3);
+            Eme ^= De;
+            BCo = ROL(Eme, 45);
+            Esi ^= Di;
+            BCu = ROL(Esi, 61);
+            Aga = BCa ^ ((~BCe) & BCi);
+            Age = BCe ^ ((~BCi) & BCo);
+            Agi = BCi ^ ((~BCo) & BCu);
+            Ago = BCo ^ ((~BCu) & BCa);
+            Agu = BCu ^ ((~BCa) & BCe);
+
+            Ebe ^= De;
+            BCa = ROL(Ebe, 1);
+            Egi ^= Di;
+            BCe = ROL(Egi, 6);
+            Eko ^= Do;
+            BCi = ROL(Eko, 25);
+            Emu ^= Du;
+            BCo = ROL(Emu, 8);
+            Esa ^= Da;
+            BCu = ROL(Esa, 18);
+            Aka = BCa ^ ((~BCe) & BCi);
+            Ake = BCe ^ ((~BCi) & BCo);
+            Aki = BCi ^ ((~BCo) & BCu);
+            Ako = BCo ^ ((~BCu) & BCa);
+            Aku = BCu ^ ((~BCa) & BCe);
+
+            Ebu ^= Du;
+            BCa = ROL(Ebu, 27);
+            Ega ^= Da;
+            BCe = ROL(Ega, 36);
+            Eke ^= De;
+            BCi = ROL(Eke, 10);
+            Emi ^= Di;
+            BCo = ROL(Emi, 15);
+            Eso ^= Do;
+            BCu = ROL(Eso, 56);
+            Ama = BCa ^ ((~BCe) & BCi);
+            Ame = BCe ^ ((~BCi) & BCo);
+            Ami = BCi ^ ((~BCo) & BCu);
+            Amo = BCo ^ ((~BCu) & BCa);
+            Amu = BCu ^ ((~BCa) & BCe);
+
+            Ebi ^= Di;
+            BCa = ROL(Ebi, 62);
+            Ego ^= Do;
+            BCe = ROL(Ego, 55);
+            Eku ^= Du;
+            BCi = ROL(Eku, 39);
+            Ema ^= Da;
+            BCo = ROL(Ema, 41);
+            Ese ^= De;
+            BCu = ROL(Ese, 2);
+            Asa = BCa ^ ((~BCe) & BCi);
+            Ase = BCe ^ ((~BCi) & BCo);
+            Asi = BCi ^ ((~BCo) & BCu);
+            Aso = BCo ^ ((~BCu) & BCa);
+            Asu = BCu ^ ((~BCa) & BCe);
+        }
+
+        // copyToState(state, A)
+        shake256_context64[ 0] = Aba; shake256_context64[ 1] = Abe; shake256_context64[ 2] = Abi; shake256_context64[ 3] = Abo; shake256_context64[ 4] = Abu;
+        shake256_context64[ 5] = Aga; shake256_context64[ 6] = Age; shake256_context64[ 7] = Agi; shake256_context64[ 8] = Ago; shake256_context64[ 9] = Agu;
+        shake256_context64[10] = Aka; shake256_context64[11] = Ake; shake256_context64[12] = Aki; shake256_context64[13] = Ako; shake256_context64[14] = Aku;
+        shake256_context64[15] = Ama; shake256_context64[16] = Ame; shake256_context64[17] = Ami; shake256_context64[18] = Amo; shake256_context64[19] = Amu;
+        shake256_context64[20] = Asa; shake256_context64[21] = Ase; shake256_context64[22] = Asi; shake256_context64[23] = Aso; shake256_context64[24] = Asu;
+    }
 
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_verify_raw(uint8[] memory  /* uint16* */     c0,
-                                                int8[] memory  /* int16_t* */    s2,
-                                                uint8[] memory  /* uint16* */     h,
-                                                uint32                        logn,
-                                                uint8[] memory workingStorage) public payable returns (int16 result)
+    function keccak_inc_init() public payable
+    {
+        uint32  i;
+
+        for (i = 0; i < 25; ++i)
+        {
+            shake256_context64[i] = 0;
+        }
+        shake256_context64[25] = 0;
+    }
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function keccak_inc_absorb(uint32 r, uint8[] memory pInput, uint32 cbInput) public payable
+    {
+        uint32  i;
+        uint32  msg_offset;
+
+        msg_offset = 0;
+        while (cbInput + shake256_context64[25] >= r)
+        {
+            for (i = 0; i < r - uint32(shake256_context64[25]); i++)
+            {
+                ///////////////////////////////////////////////////////////////////////////
+                //uint64 x = shake256_context64[(shake256_context64[25] + i) >> 3];
+                //uint64 y5 = shake256_context64[25] + i;
+                //uint64 y6 = y5 & 0x07;
+                //uint64 y7 = 8 * y6;
+                //uint8  y8 = uint8(pInput[i]);
+                //uint64 y9 = uint64(y8);
+                //uint64 y = y9 << y7;
+                //
+                //x ^= y;
+                ///////////////////////////////////////////////////////////////////////////
+
+                shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(pInput[msg_offset+i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
+            }
+            cbInput -= uint32(r - shake256_context64[25]);
+            msg_offset = msg_offset + uint32(r - shake256_context64[25]);  //pInput += (r - shake256_context64[25]);
+            shake256_context64[25] = 0;
+
+            // Input parameters supplied in member variable shake256_context64.
+            // Output values are written to the same member variable.
+            KeccakF1600_StatePermute();
+        }
+
+        for (i = 0; i < cbInput; i++)
+        {
+            shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(pInput[msg_offset+i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
+        }
+
+        shake256_context64[25] += cbInput;
+    }
+
+    ////////////////////////////////////////
+    // Name:        keccak_inc_finalize
+    // * Description: Finalizes Keccak absorb phase, prepares for squeezing
+    //  Arguments:   - uint32 r     : rate in bytes (e.g., 168 for SHAKE128)
+    //               - uint8 p      : domain-separation byte for different Keccak-derived functions
+    ////////////////////////////////////////
+    function keccak_inc_finalize(uint32 r, uint8 p) public payable
+    {
+        shake256_context64[shake256_context64[25] >> 3] ^= uint64(p) << (8 * (shake256_context64[25] & 0x07));
+        shake256_context64[(r - 1) >> 3] ^= (uint64(128) << (8 * ((r - 1) & 0x07)));
+        shake256_context64[25] = 0;
+    }
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function keccak_inc_squeeze(uint32 outlen, uint32 r) public payable returns (uint8[] memory h)
+    {
+        uint32 i;
+        uint32 h_offset;
+
+        h = new uint8[](outlen);
+        h_offset = 0;
+
+        for (i = 0; i < outlen && i < shake256_context64[25]; i++)
+        {
+            h[i] = uint8(shake256_context64[(r - shake256_context64[25] + i) >> 3] >> (8 * ((r - shake256_context64[25] + i) & 0x07)));
+        }
+
+        h_offset += i; // h += i;
+        outlen -= i;
+        shake256_context64[25] -= i;
+
+        while (outlen > 0)
+        {
+            // Input parameters supplied in member variable shake256_context64.
+            // Output values are written to the same member variable.
+            KeccakF1600_StatePermute();
+            for (i = 0; i < outlen && i < r; i++)
+            {
+                h[h_offset + i] = uint8(shake256_context64[i >> 3] >> (8 * (i & 0x07)));
+            }
+
+            h_offset += i; // h += i;
+            outlen -= i;
+            shake256_context64[25] = r - i;
+        }
+
+        r = r;
+        for (i = 0; i < outlen; i++)
+        {
+            h[h_offset + i] = 0xAA;
+        }
+
+    }
+
+    ///////////////////////////////////////
+    // Implementation: OQS_SHA3_shake256_inc
+    ///////////////////////////////////////
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function OQS_SHA3_shake256_inc_init() public payable
+    {
+        int16 ii;
+
+        for (ii=0; ii < CTX_ELEMENTS; ii++)
+            shake256_context64[uint256(ii)] = 0;
+        keccak_inc_init();
+    }
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function OQS_SHA3_shake256_inc_absorb(uint8[] memory input, uint32 inlen) public payable
+    {
+        keccak_inc_absorb(SHAKE256_RATE, input, inlen);
+    }
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function OQS_SHA3_shake256_inc_finalize() public payable
+    {
+        keccak_inc_finalize(SHAKE256_RATE, 0x1F);
+    }
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function OQS_SHA3_shake256_inc_squeeze(uint32 outlen) public payable returns (uint8[] memory output)
+    {
+        output = keccak_inc_squeeze(outlen, SHAKE256_RATE);
+    }
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function OQS_SHA3_shake256_inc_ctx_release() public payable
+    {
+        int16 ii;
+        // Blat over any sensitive data
+        for (ii=0; ii < CTX_ELEMENTS; ii++)
+            shake256_context64[uint256(ii)] = 0;
+    }
+
+    // ==== sha3_c.c END =====================================================================================================================
+
+    // ==== common.c BEGIN =====================================================================================================================
+
+    uint8  whichBlockS;
+    uint32 whichOffsetS;
+    uint8  whichBlockD;
+    uint32 whichOffsetD;
+    uint16 new_sv;
+    uint16 new_dv;
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(uint16[] memory pBlock1DataWords, uint32 logn, uint16[] memory pBlock2WorkingStorageWords) public payable
+    {
+        uint32 n;
+        uint32 n2;
+        uint32 u;
+        uint32 m;
+        uint32 p;
+        uint32 over;
+
+        uint16[63] memory pBlock3TempSixtyThreeWords;
+
+        n = uint32(1) << logn;     // n = 2^logn = 2^9 = 512
+        n2 = n << 1;               // n2 = n * 2 = 1024
+        over = overtab[logn];      // over = overtab[9] = 205
+        m = n + over;              // m = 512 + 205 = 717
+
+        for (u = 0; u < m; u++)    // m = 717
+        {
+            uint8[] memory pTwoByteBuffer;
+            uint32    w;
+            uint32    wr;
+
+            pTwoByteBuffer = OQS_SHA3_shake256_inc_squeeze(2);                      // twoByteBuffer = {0xB4, 0x67}     {0x90, 0x00}
+            w = (uint32(pTwoByteBuffer[0]) << 8) | uint32(pTwoByteBuffer[1]);       // Convert little endian bytearray to uint32
+                                                                                    // w  = 0x0000B467                  0x00009000
+            wr = w  - (uint32(24578) & (((w  - 24578 /*0x6002*/) >> 31) - 1));      // wr = 0x5465                      0x2FFE
+            wr = wr - (uint32(24578) & (((wr - 24578 /*0x6002*/) >> 31) - 1));      // wr = 0x5465 really ???           0x2FFE
+            wr = wr - (uint32(12289) & (((wr - 12289 /*0x3001*/) >> 31) - 1));      // wr = 0x2464                      0x2FFE
+            wr |= ((w - 61445 /*0xF005*/) >> 31) - 1;                               // wr = 0x2464                      0x2FFE
+
+            // Fill up the 3 blocks consecutively
+            if      (u < n ) { pBlock1DataWords          [u     ] = uint16(wr); }   // [   0.. 511] // n = 512
+            else if (u < n2) { pBlock2WorkingStorageWords[u - n ] = uint16(wr); }   // [ 512..1023] // n2 = 1024
+            else             { pBlock3TempSixtyThreeWords[u - n2] = uint16(wr); }   // [1024.. end]
+        }
+
+        for (p = 1; p <= over; p <<= 1)   // i.e. (p = 1; p <= 205, p *= 2)
+        {
+            uint32 v;
+
+            v = 0;
+            for (u = 0; u < m; u++)  // m = 717
+            {
+                uint32  j;
+                uint32  sv;
+                uint32  dv;
+                uint32  mk;
+                //uint8  whichBlockS;
+                //uint32 whichOffsetS;
+                //uint8  whichBlockD;
+                //uint32 whichOffsetD;
+
+                // Get the value previously stored in its respective block, and a pointer to it
+                //if      (u < n)  { pSomethingS = &pBlock1DataWords          [u     ]; sv = pBlock1DataWords          [u     ];} // sv = 0x2464
+                //else if (u < n2) { pSomethingS = &pBlock2WorkingStorageWords[u - n ]; sv = pBlock2WorkingStorageWords[u - n ];}
+                //else             { pSomethingS = &pBlock3TempSixtyThreeWords[u - n2]; sv = pBlock3TempSixtyThreeWords[u - n2];}
+                if      (u < n)  { whichBlockS = 1; whichOffsetS = u   ; sv = pBlock1DataWords          [u     ];} // sv = 0x2464
+                else if (u < n2) { whichBlockS = 2; whichOffsetS = u-n ; sv = pBlock2WorkingStorageWords[u - n ];}
+                else             { whichBlockS = 3; whichOffsetS = u-n2; sv = pBlock3TempSixtyThreeWords[u - n2];}
+
+                j = u - v;                   // j = 0 - 0
+                mk = (sv >> 15) - uint32(1); // mk = 0 - 1 = 0xFFFF
+                v -= mk;                     // v = 1   // Be aware that both v and mk are unsigned.
+                if (u < p)                   // First round, u = 0, p = 1
+                {
+                    continue;
+                }
+
+                //if      ((u - p) < n)  { pSomethingD = &pBlock1DataWords          [(u - p)     ]; dv = pBlock1DataWords          [(u - p)     ];}
+                //else if ((u - p) < n2) { pSomethingD = &pBlock2WorkingStorageWords[(u - p) - n ]; dv = pBlock2WorkingStorageWords[(u - p) - n ];}
+                //else                   { pSomethingD = &pBlock3TempSixtyThreeWords[(u - p) - n2]; dv = pBlock3TempSixtyThreeWords    [(u - p) - n2];}
+                if      ((u - p) < n)  { whichBlockD = 1; whichOffsetD = (u-p)   ; dv = pBlock1DataWords          [(u - p)     ];}
+                else if ((u - p) < n2) { whichBlockD = 2; whichOffsetD = (u-p)-n ; dv = pBlock2WorkingStorageWords[(u - p) - n ];}
+                else                   { whichBlockD = 3; whichOffsetD = (u-p)-n2; dv = pBlock3TempSixtyThreeWords[(u - p) - n2];}
+
+                mk &= -(((j & p) + 0x01FF) >> 9);  // Be aware that all these vars are unsigned.
+
+                //*pSomethingS = (uint16_t)(sv ^ (mk & (sv ^ dv)));
+                //*pSomethingD = (uint16_t)(dv ^ (mk & (sv ^ dv)));
+
+                /*uint16*/ new_sv = uint16(sv ^ (mk & (sv ^ dv)));
+                /*uint16*/ new_dv = uint16(dv ^ (mk & (sv ^ dv)));
+                if      (whichBlockS == 1) { pBlock1DataWords          [whichOffsetS] = new_sv; }
+                else if (whichBlockS == 2) { pBlock2WorkingStorageWords[whichOffsetS] = new_sv; }
+                else                       { pBlock3TempSixtyThreeWords[whichOffsetS] = new_sv; }
+                if      (whichBlockD == 1) { pBlock1DataWords          [whichOffsetD] = new_dv; }
+                else if (whichBlockD == 2) { pBlock2WorkingStorageWords[whichOffsetD] = new_dv; }
+                else                       { pBlock3TempSixtyThreeWords[whichOffsetD] = new_dv; }
+
+            }
+        }
+    }
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function PQCLEAN_FALCON512_CLEAN_is_short(uint16[] memory s1, int16[] memory s2, uint32 logn) public pure returns (int16)
+    {
+        uint32 n;
+        uint32 u;
+        uint32 s;
+        uint32 ng;
+
+        n = uint32(1) << logn;
+        s = 0;
+        ng = 0;
+        for (u = 0; u < n; u++)
+        {
+            uint16 z;
+
+            z = s1[u];
+            s += uint32(z * z);
+            ng |= s;
+
+            z = uint16(s2[u]);
+            s += uint32(z * z);
+            ng |= s;
+        }
+
+        s |= -(ng >> 31);
+
+        uint32 val = ((uint32(7085) * uint32(12289)) >> (10 - logn));
+        if (s < val)
+           return 1;
+        return 0; // //return s < ((uint32(7085) * uint32(12289)) >> (10 - logn));
+    }
+
+    // ==== common.c END =====================================================================================================================
+
+    // ==== codec.c BEGIN =====================================================================================================================
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function PQCLEAN_FALCON512_CLEAN_modq_decode(uint16[] memory x, uint16 logn, uint8[] memory In, uint16 In_offset, uint16 max_In_len)  public pure returns (uint16)
+    {
+        uint16        n;
+        uint16        In_len;
+        uint16        u;
+        uint16        buf_ndx;
+        uint16        acc;
+        uint16        acc_len;
+
+        n = uint16(1) << logn;
+        In_len = ((n * 14) + 7) >> 3;
+        if (In_len > max_In_len)
+        {
+            return 0;
+        }
+
+        buf_ndx = 0;
+        acc     = 0;
+        acc_len = 0;
+        u       = 0;
+
+        while (u < n)
+        {
+            acc = (acc << 8) | uint16(uint8(In[In_offset + buf_ndx++]));   // acc = (acc << 8) | (*buf++);
+            acc_len += 8;
+            if (acc_len >= 14)
+            {
+                uint16 w;
+
+                acc_len -= 14;
+                w = (acc >> acc_len) & 0x3FFF;
+                if (w >= 12289)
+                {
+                    return 0;
+                }
+                x[u++] = uint16(w);
+                u++;
+            }
+        }
+
+        if ((acc & ((uint32(1) << acc_len) - 1)) != 0)
+        {
+            return 0;
+        }
+
+        return In_len;
+    }
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function PQCLEAN_FALCON512_CLEAN_comp_decode(int16[] memory x, uint16 logn, uint8[] memory In, uint16 max_In_len) public pure returns (uint16)
+    {
+        uint16  buf_ndx;
+        uint16  n;
+        uint16  u;
+        uint16  v;
+        uint16  acc;
+        uint    acc_len;
+
+        n = uint16(1) << logn;
+        buf_ndx = 0;
+        acc = 0;
+        acc_len = 0;
+        v = 0;
+        for (u = 0; u < n; u++)
+        {
+            uint b;
+            uint s;
+            uint m;
+
+            if (v >= max_In_len)
+            {
+                return 0;
+            }
+
+            acc = (acc << 8) | uint16(uint8(In[buf_ndx++])); // acc = (acc << 8) | uint32(buf[v++]);
+            b = acc >> acc_len;
+            s = b & 128;
+            m = b & 127;
+
+            for (;;)
+            {
+                if (acc_len == 0)
+                {
+                    if (v >= max_In_len)
+                    {
+                        return 0;
+                    }
+                    acc = (acc << 8) | uint16(uint8(In[buf_ndx++])); // acc = (acc << 8) | uint32(buf[v++]);
+                    acc_len = 8;
+                }
+
+                acc_len--;
+                if (((acc >> acc_len) & 1) != 0)
+                {
+                    break;
+                }
+
+                m += 128;
+                if (m > 2047)
+                {
+                    return 0;
+                }
+            }
+            int16 val = int16((s!=0) ? -int(m) : int(m));
+            x[u] = val; // x[u] = int16(s ? -int(m) : int(m));
+        }
+        return v;
+    }
+//}
+// ==== codec.c END =====================================================================================================================
+
+    ////////////////////////////////////////
+    //
+    ////////////////////////////////////////
+    function PQCLEAN_FALCON512_CLEAN_verify_raw(uint16[] memory c0,
+                                                int16[]  memory s2,
+                                                uint16[] memory h,
+                                                uint32          logn,
+                                                uint16[] memory pWorkingStorageWords) public payable returns (int16 result)
     {
         uint32 u;
         uint32 n;
-        uint8[] memory /* uint16* */ tt;
 
-        //fprintf(stdout, "INFO: PQCLEAN_FALCON512_CLEAN_verify_raw() ENTRY\n");
         n = uint32(1) << logn;
-        tt = workingStorage;  // tt = (uint16 *)workingStorage;
 
         // Reduce s2 elements modulo q ([0..q-1] range).
         for (u = 0; u < n; u++)
         {
             uint32 w;
 
-            uint16 tmp1 = int8_array_uint16_get(s2,u); // w = uint32(s2[u]);
-            w = uint32(tmp1);
+            w = uint32(s2[u]);
 
             w += Q & -(w >> 31);
-            uint8_array_uint16_set(tt,u,uint16(w)); // tt[u] = uint16(w);
+            pWorkingStorageWords[u] = uint16(w);
         }
 
-        // Compute -s1 = s2*h - c0 mod phi mod q (in tt[]).
-        mq_NTT(tt, logn);
-        mq_poly_montymul_ntt(tt, h, logn);
-        mq_iNTT(tt, logn);
-        mq_poly_sub(tt, c0, logn);
+        // Compute -s1 = s2*h - c0 mod phi mod q (in pWorkingStorageWords[]).
+        mq_NTT(pWorkingStorageWords, logn);
+        mq_poly_montymul_ntt(pWorkingStorageWords, h, logn);
+        mq_iNTT(pWorkingStorageWords, logn);
+        mq_poly_sub(pWorkingStorageWords, c0, logn);
 
         // Normalize -s1 elements into the [-q/2..q/2] range.
         for (u = 0; u < n; u++)
         {
             int32 w;
-
-            uint16 tmp1 = uint8_array_uint16_get(tt,u); // w = int32(tt[u]);
-            w = int32(tmp1);
-
+            w = int32(pWorkingStorageWords[u]);
             w -= int32(Q & -(((Q >> 1) - uint32(w)) >> 31));
-            uint8_array_int16_set(tt,u,int16(w)); // tt[u] = int16(w);  // ((int16 *)tt)[u] = (int16)w;
+            pWorkingStorageWords[u] = uint16(int16(w));
         }
 
         // Signature is valid if and only if the aggregate (-s1,s2) vector is short enough.
-        int16 rc = PQCLEAN_FALCON512_CLEAN_is_short(tt, s2, logn);
+        int16 success = PQCLEAN_FALCON512_CLEAN_is_short(pWorkingStorageWords, s2, logn);
 
-        //fprintf(stdout, "INFO: PQCLEAN_FALCON512_CLEAN_verify_raw() EXIT\n");
-        return rc;
+        return success;
     }
 //}
-// ==== vrfy.c END =====================================================================================================================
-// ==== pqclean.c BEGIN =====================================================================================================================
+    // ==== vrfy.c END =====================================================================================================================
 
-
-//import "falcon_sha3_c.sol";
-//import * as falcon_sha3 from "lib_falcon_sha3_c.sol";
-//import "falcon_sha3_c.sol" as falcon_sha3;
-
-//library lib_falcon_pqclean
-//{
-
-    // ====================================================================
-    // Implementation
-    // ====================================================================
+    // ==== pqclean.c BEGIN =====================================================================================================================
 
     ////////////////////////////////////////
     //
-    // int PQCLEAN_FALCON512_CLEAN_crypto_sign_verify(const uint8_t*  sig,
-    //                                                size_t          sigLen,
-    //                                                const uint8_t*  _msg,
-    //                                                size_t          msgLen,
-    //                                                const uint8_t*  pubKey)
+    // int PQCLEAN_FALCON512_CLEAN_crypto_sign_verify(const uint8_t*  pSignatureBuf,
+    //                                                size_t          cbSignatureBuf,
+    //                                                const uint8_t*  pMessage,
+    //                                                size_t          cbMessage,
+    //                                                const uint8_t*  pPublicKey)
     ////////////////////////////////////////
     function verify (uint8          signatureType,
-                     uint8[] memory sig,
-                     uint16         sigLen,
-                     uint8[] memory _msg,
-                     uint16         msgLen,
-                     uint8[] memory pubKey,
-                     uint16         pubKeyLen) public payable returns (int16)
+                     uint8[] memory pSignatureBuf,
+                     uint16         cbSignatureBuf,
+                     uint8[] memory pMessage,
+                     uint16         cbMessage,
+                     uint8[] memory pPublicKey,
+                     uint16         cbPublicKey) public payable returns (int16)
     {
-        //int8 r = start(signature);
-        //if (r < 0)
-        //{
-        //  return r;
-        //}
-        //return finish(signature, signatureType, pubKey, keccak256(data));
 
         ///////////////////////////////////////////////
         // Validate params
@@ -1637,16 +1464,16 @@ TODO: <== */
         }
 
         // RULE: Signature must have a minimum length of 42 bytes
-        if (sigLen <= 1 + NONCELEN) // 1 + 40
+        if (cbSignatureBuf <= 1 + NONCELEN) // 1 + 40
         {
             return FALCON_ERR_SIZE + (-20);
         }
 
         {
             // First byte should have the form "0cc1nnnn"
-            uint8 sig_bits_cc = (uint8(sig[0]) >> 5) & 0x03;
-            uint8 sig_bits_nnnn = uint8(sig[0]) & 0x0F;
-            uint8 sig_bits_0xx1 = (uint8(sig[0]) >> 4) & 0x09;
+            uint8 sig_bits_cc   = (uint8(pSignatureBuf[0]) >> 5) & 0x03;
+            uint8 sig_bits_nnnn = uint8(pSignatureBuf[0]) & 0x0F;
+            uint8 sig_bits_0xx1 = (uint8(pSignatureBuf[0]) >> 4) & 0x09;
             if (sig_bits_0xx1 != 0x01)
             {
                 return FALCON_ERR_FORMAT + (-30);
@@ -1672,7 +1499,7 @@ TODO: <== */
         }
 
         // RULE: Public Key must have length of more than zero
-        if (pubKeyLen <= 0)
+        if (cbPublicKey <= 0)
         {
             return FALCON_ERR_SIZE + (-70);
         }
@@ -1680,13 +1507,13 @@ TODO: <== */
 
         {
             // First byte should have the form "0000nnnn"
-            uint8 pubkey_bits_0000 = uint8(pubKey[0]) >> 4;
-            uint8 pubKey_bits_nnnn = uint8(pubKey[0]) & 0x0F;
-            uint8 sig_bits_nnnn = uint8(sig[0]) & 0x0F;
+            uint8 pubkey_bits_0000 = uint8(pPublicKey[0]) >> 4;
+            uint8 pubKey_bits_nnnn = uint8(pPublicKey[0]) & 0x0F;
+            uint8 sig_bits_nnnn    = uint8(pSignatureBuf[0]) & 0x0F;
 
             // RULE: Public Key must have the correct length
-            //if (pubKeyLen != 897)
-            if (pubKeyLen != falconPubkeySize(pubKey_bits_nnnn) )
+            //if (cbPublicKey != 897)
+            if (cbPublicKey != falconPubkeySize(pubKey_bits_nnnn) )
             {
                 return FALCON_ERR_SIZE + (-80);
             }
@@ -1712,9 +1539,9 @@ TODO: <== */
             // RULE: Inferred Signature Type (0) must have the correct signature length in the public key
             // RULE: Padded Signature Type (2) must have the correct signature length in the public key
             // RULE: Constant-Time Signature Type (3) must have the correct signature length in the public key
-            if ( ((signatureType == FALCON_SIG_1_COMPRESSED) && (sigLen > FALCON_SIG_COMPRESSED_MAXSIZE[pubKey_bits_nnnn])) ||
-                 ((signatureType == FALCON_SIG_2_PADDED    ) && (sigLen != FALCON_SIG_PADDED_SIZE      [pubKey_bits_nnnn])) ||
-                 ((signatureType == FALCON_SIG_3_CT        ) && (sigLen != FALCON_SIG_CT_SIZE          [pubKey_bits_nnnn])) )
+            if ( ((signatureType == FALCON_SIG_1_COMPRESSED) && (cbSignatureBuf > FALCON_SIG_COMPRESSED_MAXSIZE[pubKey_bits_nnnn])) ||
+                 ((signatureType == FALCON_SIG_2_PADDED    ) && (cbSignatureBuf != FALCON_SIG_PADDED_SIZE      [pubKey_bits_nnnn])) ||
+                 ((signatureType == FALCON_SIG_3_CT        ) && (cbSignatureBuf != FALCON_SIG_CT_SIZE          [pubKey_bits_nnnn])) )
             {
                 return FALCON_ERR_SIZE + (-120);
             }
@@ -1723,88 +1550,84 @@ TODO: <== */
 
         // TODO: RULE: Message must have a length of more than zero
 
+        uint8[]   memory pNonce     = new uint8[](NONCELEN);         // uint8[NONCELEN] memory pNonce;
+        uint16[]  memory pWordArrayH;              // uint16[512]
+        int16[]   memory pSignedWordArraySig;      // int16[512]
 
-        uint32 sigDataLen = sigLen - 1 - NONCELEN;
-        //uint8[sigDataLen] storage sigData;
-        uint8[] memory sigData = new uint8[](g_SIGBUFLEN); // uint8[g_SIGBUFLEN] memory sigData;
-        uint8[] memory sigNonce = new uint8[](NONCELEN); // uint8[NONCELEN] memory sigNonce;
+        pWordArrayH              = new uint16[](512);  // uint16[512]
+        pSignedWordArraySig      = new int16[](512);   // int16[512]
 
-        // Separate Nonce and Signature
+        int16 rc = FALCON_ERR_UNDEFINED;
+
         {
-            uint ii;
-            uint sourceOffset = 1;
-            for (ii=0; ii<NONCELEN; ii++)
+            uint32         sigDataLen = cbSignatureBuf - 1 - NONCELEN; // uint8[sigDataLen] storage sigData;
+            uint8[] memory sigData    = new uint8[](g_SIGBUFLEN);      // uint8[g_SIGBUFLEN] memory sigData;
+
+            // Separate Nonce and Signature
             {
-                sigNonce[ii] = uint8(sig[sourceOffset + ii]);
+                uint ii;
+                uint sourceOffset = 1;
+                for (ii=0; ii<NONCELEN; ii++)
+                {
+                    pNonce[ii] = uint8(pSignatureBuf[sourceOffset + ii]);
+                }
+
+                sourceOffset = 1 + NONCELEN;
+                for (ii=0; ii<sigDataLen; ii++)
+                {
+                    sigData[ii] = uint8(pSignatureBuf[sourceOffset + ii]);
+                }
             }
 
-            sourceOffset = 1 + NONCELEN;
-            for (ii=0; ii<sigDataLen; ii++)
+
+            ////////////////////////////////////////
+            // static int do_verify(const uint8_t*  pNonce,
+            //                      const uint8_t*  sigData,
+            //                      size_t          sigDataLen,
+            //                      const uint8_t*  pMessage,
+            //                      size_t          cbMessage,
+            //                      const uint8_t*  pPublicKey)
+            ////////////////////////////////////////
+
+            uint16 sz1;
+            uint16 sz2;
+
+            ///////////////////////////////////////////////
+            // Decode public key.
+            sz1 = PQCLEAN_FALCON512_CLEAN_modq_decode( pWordArrayH, 9, pPublicKey, 1, PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1);
+            if (sz1 != PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1)
             {
-                sigData[ii] = uint8(sig[sourceOffset + ii]);
+                if (rc == FALCON_ERR_UNDEFINED)
+                   rc = FALCON_ERR_BADSIG + (-130);
+                //return rc;  // It may make no sense to carry on, but for that gas estimate, we will try...
+            }
+
+            PQCLEAN_FALCON512_CLEAN_to_ntt_monty(pWordArrayH, 9);
+
+            ///////////////////////////////////////////////
+            // Decode signature.
+            sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(pSignedWordArraySig, 9, sigData, uint16(sigDataLen));
+            if (sz2 != uint16(sigDataLen))
+            {
+                if (rc == FALCON_ERR_UNDEFINED)
+                    rc = FALCON_ERR_BADSIG + (-140);
+                //return rc;  // It may make no sense to carry on, but for that gas estimate, we will try...
             }
         }
 
+        uint16[]  memory pWordArrayWorkingStorage; // uint8[2*512]
+        uint16[]  memory pWordArrayHm;             // uint16[512]
 
-        ////////////////////////////////////////
-        // static int do_verify(const uint8_t*  sigNonce,
-        //                      const uint8_t*  sigData,
-        //                      size_t          sigDataLen,
-        //                      const uint8_t*  _msg,
-        //                      size_t          msgLen,
-        //                      const uint8_t*  pubKey)
-        ////////////////////////////////////////
-
-        //uint8[2*512] memory stackvar_doverify_workingStorage; // array of 1024 bytes
-        //uint16[512]  memory stackvar_doverify_h;
-        //uint16[512]  memory stackvar_doverify_hm;
-        //int16[512]   memory stackvar_doverify_sig;
-
-        uint8[]  memory stackvar_doverify_workingStorage; // uint8[2*512]
-        uint8[]  memory stackvar_doverify_h;              // uint16[512]
-        uint8[]  memory stackvar_doverify_hm;             // uint16[512]
-        int8[]   memory stackvar_doverify_sig;            // int16[512]
-
-        uint16        sz1;
-        uint16        sz2;
-        int16         rc;
-        //uint8[] memory tempDynamicArray;
-
-        stackvar_doverify_workingStorage = new uint8[](2*512);  // uint8[2*512]
-        stackvar_doverify_h              = new uint8[](2*512);  // uint16[512]
-        stackvar_doverify_hm             = new uint8[](2*512);  // uint16[512]
-        stackvar_doverify_sig            = new int8[](2*512);   // int16[512]
-
-
+        pWordArrayWorkingStorage = new uint16[](512);  // uint8[2*512]
+        pWordArrayHm             = new uint16[](512);  // uint16[512]
 
         ///////////////////////////////////////////////
-        // Decode public key.
-        //tempDynamicArray = uint8[](stackvar_doverify_h);
-        //tempDynamicArray = new uint8[](1024);
-        sz1 = PQCLEAN_FALCON512_CLEAN_modq_decode( stackvar_doverify_h, 9, pubKey, 1, PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1);
-        if (sz1 != PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1)
-        {
-            return FALCON_ERR_BADSIG + (-130);
-        }
-
-        PQCLEAN_FALCON512_CLEAN_to_ntt_monty(stackvar_doverify_h, 9);
-
-        ///////////////////////////////////////////////
-        // Decode signature.
-        sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(stackvar_doverify_sig, 9, sigData, uint16(sigDataLen));
-        if (sz2 != uint16(sigDataLen))
-        {
-            return FALCON_ERR_BADSIG + (-140);
-        }
-
-
-        ///////////////////////////////////////////////
-        // Hash Nonce + message into a vector.
+        // Hash Nonce + Message into a vector.
         OQS_SHA3_shake256_inc_init();
-        OQS_SHA3_shake256_inc_absorb(sigNonce, NONCELEN);
-        OQS_SHA3_shake256_inc_absorb(_msg, msgLen);
+        OQS_SHA3_shake256_inc_absorb(pNonce, NONCELEN);
+        OQS_SHA3_shake256_inc_absorb(pMessage, cbMessage);
         OQS_SHA3_shake256_inc_finalize();
-        PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(stackvar_doverify_hm, 9, stackvar_doverify_workingStorage);
+        PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(pWordArrayHm, 9, pWordArrayWorkingStorage);
         OQS_SHA3_shake256_inc_ctx_release();
 
 
@@ -1812,19 +1635,23 @@ TODO: <== */
 
         ///////////////////////////////////////////////
         // Verify signature.
-        rc = PQCLEAN_FALCON512_CLEAN_verify_raw(stackvar_doverify_hm, stackvar_doverify_sig, stackvar_doverify_h, 9, stackvar_doverify_workingStorage);
-        if (rc == 0)
+        int16 success = PQCLEAN_FALCON512_CLEAN_verify_raw(pWordArrayHm, pSignedWordArraySig, pWordArrayH, 9, pWordArrayWorkingStorage);
+        if (success == 0)
         {
-            return FALCON_ERR_BADSIG + (-150);
+            if (rc == FALCON_ERR_UNDEFINED)
+                rc = FALCON_ERR_BADSIG + (-150);
+            //return rc;  // It may make no sense to carry on, but for that gas estimate, we will try...
         }
 
-        return FALCON_ERR_SUCCESS;
+        if (rc == FALCON_ERR_UNDEFINED)
+            rc = FALCON_ERR_SUCCESS;
+
+        return rc;
     }
 
 
 
 
-//}
-// ==== pqclean.c END =====================================================================================================================
+    // ==== pqclean.c END =====================================================================================================================
 
-}
+} // End of Contract
