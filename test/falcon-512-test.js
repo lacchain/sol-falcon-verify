@@ -830,18 +830,10 @@ contract("Falcon", accounts =>
                 console.log(errorStr);
             }
 
-            //if (1)
-            //{
-            //    let stateVar1 = await falcon1.getStateVar1.call.apply(null, null);
-            //    let stateVar2 = await falcon1.getStateVar2.call.apply(null, null);
-            //    console.log('stateVar1=' + stateVar1 + ', stateVar2=' + stateVar2);
-            //}
-
             assert.equal(ret, expectedRet, errorStr);
             let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
-
     });
 
 });

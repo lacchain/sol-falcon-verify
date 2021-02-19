@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
-// Some parts: Apache-2.0
+// Portions: Apache-2.0
 
-// Useful reference:
-//    https://medium.com/@jeancvllr/solidity-tutorial-all-about-bytes-9d88fdb22676
-//    https://medium.com/@jeancvllr/solidity-tutorial-all-about-libraries-762e5a3692f9
-//    https://manojpramesh.github.io/solidity-cheatsheet/
+////////////////////////////////////////////////////////////////////////////////
+// Algorithm and code from OQS and PQClean projects.
+//     * OQS: https://github.com/open-quantum-safe/
+//     * PQClean: https://github.com/PQClean/
+//
+// Solidity port by Cambridge Quantum Computing Ltd for IDB Lacchain project
+//     * https://github.com/lacchain/
+//     * https://www.cambridgequantum.com
+// JGilmore (22/02/2021 12:37)
+////////////////////////////////////////////////////////////////////////////////
 
 
 contract Falcon
@@ -50,17 +56,17 @@ contract Falcon
     uint32 constant private g_signatureLen = 658;
     uint32 constant private g_SIGBUFLEN = g_signatureLen - 1 - NONCELEN;
 
-    uint16[16] private FALCON_PUBKEY_SIZE            = [5,5,8,15,29,57,113,225,449,897,1793,3585,7169,14337,28673,57345];
+    uint16[16] /*constant*/ private FALCON_PUBKEY_SIZE            = [5,5,8,15,29,57,113,225,449,897,1793,3585,7169,14337,28673,57345];
 
     // Maximum signature size (in bytes) when using the COMPRESSED format. In practice, the signature will be shorter.
-    //#define FALCON_SIG_COMPRESSED_MAXSIZE(logn) (((((11u << (logn)) + (101u >> (10 - (logn)))) + 7) >> 3) + 41)
+    //    #define FALCON_SIG_COMPRESSED_MAXSIZE(logn) (((((11u << (logn)) + (101u >> (10 - (logn)))) + 7) >> 3) + 41)
     // Signature size (in bytes) when using the PADDED format. The size is exact.
-    //#define FALCON_SIG_PADDED_SIZE(logn) (44u + 3 * (256u >> (10 - (logn))) + 2 * (128u >> (10 - (logn))) + 3 * (64u >> (10 - (logn))) + 2 * (16u >> (10 - (logn))) - 2 * (2u >> (10 - (logn))) - 8 * (1u >> (10 - (logn))))
+    //    #define FALCON_SIG_PADDED_SIZE(logn) (44u + 3 * (256u >> (10 - (logn))) + 2 * (128u >> (10 - (logn))) + 3 * (64u >> (10 - (logn))) + 2 * (16u >> (10 - (logn))) - 2 * (2u >> (10 - (logn))) - 8 * (1u >> (10 - (logn))))
     // Signature size (in bytes) when using the CT format. The size is exact.
-    //#define FALCON_SIG_CT_SIZE(logn) ((3u << ((logn) - 1)) - ((logn) == 3) + 41)
-    uint16[16] private FALCON_SIG_COMPRESSED_MAXSIZE = [43,44,47,52,64,86,130,219,397,752,1462,2857,5673,11305,22569,45097];
-    uint16[16] private FALCON_SIG_PADDED_SIZE        = [44,44,47,52,63,82,122,200,356,666,1280,44,44,44,44,44];
-    uint16[16] private FALCON_SIG_CT_SIZE            = [41,44,47,52,65,89,137,233,425,809,1577,3113,6185,12329,24617,49193];
+    //    #define FALCON_SIG_CT_SIZE(logn) ((3u << ((logn) - 1)) - ((logn) == 3) + 41)
+    uint16[16] /*constant*/ private FALCON_SIG_COMPRESSED_MAXSIZE = [43,44,47,52,64,86,130,219,397,752,1462,2857,5673,11305,22569,45097];
+    uint16[16] /*constant*/ private FALCON_SIG_PADDED_SIZE        = [44,44,47,52,63,82,122,200,356,666,1280,44,44,44,44,44];
+    uint16[16] /*constant*/ private FALCON_SIG_CT_SIZE            = [41,44,47,52,65,89,137,233,425,809,1577,3113,6185,12329,24617,49193];
 
     // From: common.c
     uint16[11] /*constant*/ private overtab = [ 0, /* unused */ 65, 67, 71, 77, 86, 100, 122, 154, 205, 287 ]; // [11*2=22 bytes]
@@ -441,7 +447,6 @@ contract Falcon
     {
         if (logn > 15)
             logn = 15;
-        //return (( ((uint16(logn))<=1) ? uint16(4) : (uint16(7) << ((logn)-2))) + 1);
         return FALCON_PUBKEY_SIZE[logn];
     }
 
@@ -674,7 +679,7 @@ contract Falcon
     ////////////////////////////////////////
     // Convert a polynomial (mod q) to Montgomery representation.
     ////////////////////////////////////////
-    function mq_poly_tomonty(uint16[] memory pWordArray, uint32 logn) private pure
+    function mq_poly_tomonty(uint16[] memory pWordArrayF, uint32 logn) private pure
     {
         uint32  u;
         uint32  n;
@@ -682,7 +687,7 @@ contract Falcon
         n = uint32(1) << logn;
         for (u = 0; u < n; u++)
         {
-            pWordArray[u] = uint16(mq_montymul(pWordArray[u], R2));
+            pWordArrayF[u] = uint16(mq_montymul(pWordArrayF[u], R2));
         }
     }
 
@@ -722,10 +727,10 @@ contract Falcon
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_to_ntt_monty(uint16[] memory pWordArray, uint32 logn) public view
+    function PQCLEAN_FALCON512_CLEAN_to_ntt_monty(uint16[] memory pWordArrayH, uint32 logn) public view
     {
-        mq_NTT(pWordArray, logn);
-        mq_poly_tomonty(pWordArray, logn);
+        mq_NTT(pWordArrayH, logn);
+        mq_poly_tomonty(pWordArrayH, logn);
     }
 
 
@@ -1011,7 +1016,6 @@ contract Falcon
         {
             shake256_context64[(shake256_context64[25] + i) >> 3] ^= (uint64(uint8(pInput[msg_offset+i])) << (8 * ((shake256_context64[25] + i) & 0x07)));
         }
-
         shake256_context64[25] += cbInput;
     }
 
@@ -1183,15 +1187,8 @@ contract Falcon
                 uint32  sv;
                 uint32  dv;
                 uint32  mk;
-                //uint8  whichBlockS;
-                //uint32 whichOffsetS;
-                //uint8  whichBlockD;
-                //uint32 whichOffsetD;
 
                 // Get the value previously stored in its respective block, and a pointer to it
-                //if      (u < n)  { pSomethingS = &pBlock1DataWords          [u     ]; sv = pBlock1DataWords          [u     ];} // sv = 0x2464
-                //else if (u < n2) { pSomethingS = &pBlock2WorkingStorageWords[u - n ]; sv = pBlock2WorkingStorageWords[u - n ];}
-                //else             { pSomethingS = &pBlock3TempSixtyThreeWords[u - n2]; sv = pBlock3TempSixtyThreeWords[u - n2];}
                 if      (u < n)  { whichBlockS = 1; whichOffsetS = u   ; sv = pBlock1DataWords          [u     ];} // sv = 0x2464
                 else if (u < n2) { whichBlockS = 2; whichOffsetS = u-n ; sv = pBlock2WorkingStorageWords[u - n ];}
                 else             { whichBlockS = 3; whichOffsetS = u-n2; sv = pBlock3TempSixtyThreeWords[u - n2];}
@@ -1204,9 +1201,6 @@ contract Falcon
                     continue;
                 }
 
-                //if      ((u - p) < n)  { pSomethingD = &pBlock1DataWords          [(u - p)     ]; dv = pBlock1DataWords          [(u - p)     ];}
-                //else if ((u - p) < n2) { pSomethingD = &pBlock2WorkingStorageWords[(u - p) - n ]; dv = pBlock2WorkingStorageWords[(u - p) - n ];}
-                //else                   { pSomethingD = &pBlock3TempSixtyThreeWords[(u - p) - n2]; dv = pBlock3TempSixtyThreeWords    [(u - p) - n2];}
                 if      ((u - p) < n)  { whichBlockD = 1; whichOffsetD = (u-p)   ; dv = pBlock1DataWords          [(u - p)     ];}
                 else if ((u - p) < n2) { whichBlockD = 2; whichOffsetD = (u-p)-n ; dv = pBlock2WorkingStorageWords[(u - p) - n ];}
                 else                   { whichBlockD = 3; whichOffsetD = (u-p)-n2; dv = pBlock3TempSixtyThreeWords[(u - p) - n2];}
@@ -1270,7 +1264,7 @@ contract Falcon
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_modq_decode(uint16[] memory x, uint16 logn, uint8[] memory In, uint16 In_offset, uint16 max_In_len)  public pure returns (uint16)
+    function PQCLEAN_FALCON512_CLEAN_modq_decode(uint16[] memory pX, uint16 logn, uint8[] memory pInput, uint16 In_offset, uint16 cbInputMax)  public pure returns (uint16)
     {
         uint16        n;
         uint16        In_len;
@@ -1281,7 +1275,7 @@ contract Falcon
 
         n = uint16(1) << logn;
         In_len = ((n * 14) + 7) >> 3;
-        if (In_len > max_In_len)
+        if (In_len > cbInputMax)
         {
             return 0;
         }
@@ -1293,7 +1287,7 @@ contract Falcon
 
         while (u < n)
         {
-            acc = (acc << 8) | uint16(uint8(In[In_offset + buf_ndx++]));   // acc = (acc << 8) | (*buf++);
+            acc = (acc << 8) | uint16(uint8(pInput[In_offset + buf_ndx++]));   // acc = (acc << 8) | (*buf++);
             acc_len += 8;
             if (acc_len >= 14)
             {
@@ -1305,7 +1299,7 @@ contract Falcon
                 {
                     return 0;
                 }
-                x[u++] = uint16(w);
+                pX[u++] = uint16(w);
                 u++;
             }
         }
@@ -1321,33 +1315,35 @@ contract Falcon
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_comp_decode(int16[] memory x, uint16 logn, uint8[] memory In, uint16 max_In_len) public pure returns (uint16)
+    function PQCLEAN_FALCON512_CLEAN_comp_decode(int16[] memory pOutput, uint16 logn, uint8[] memory pInput, uint16 cbInputMax) public pure returns (uint16)
     {
-        uint16  buf_ndx;
         uint16  n;
         uint16  u;
         uint16  v;
-        uint16  acc;
-        uint    acc_len;
+        uint32  acc;
+        uint16  acc_len;
 
         n = uint16(1) << logn;
-        buf_ndx = 0;
+
         acc = 0;
         acc_len = 0;
         v = 0;
+
         for (u = 0; u < n; u++)
         {
-            uint b;
-            uint s;
-            uint m;
+            uint16 b;
+            uint16 s;
+            uint16 m;
 
-            if (v >= max_In_len)
+            if (v >= cbInputMax)
             {
                 return 0;
             }
 
-            acc = (acc << 8) | uint16(uint8(In[buf_ndx++])); // acc = (acc << 8) | uint32(buf[v++]);
-            b = acc >> acc_len;
+            uint16 aaa = uint16(uint32(pInput[v++]));
+            acc = (acc << 8) | aaa;                          // acc = (acc << 8) | uint32(buf[v++]);
+
+            b = uint16(acc >> acc_len);
             s = b & 128;
             m = b & 127;
 
@@ -1355,11 +1351,11 @@ contract Falcon
             {
                 if (acc_len == 0)
                 {
-                    if (v >= max_In_len)
+                    if (v >= cbInputMax)
                     {
                         return 0;
                     }
-                    acc = (acc << 8) | uint16(uint8(In[buf_ndx++])); // acc = (acc << 8) | uint32(buf[v++]);
+                    acc = (acc << 8) | uint32(pInput[v++]); // acc = (acc << 8) | uint32(buf[v++]);
                     acc_len = 8;
                 }
 
@@ -1375,20 +1371,24 @@ contract Falcon
                     return 0;
                 }
             }
+
             int16 val = int16((s!=0) ? -int(m) : int(m));
-            x[u] = val; // x[u] = int16(s ? -int(m) : int(m));
-        }
+            pOutput[u] = val;                               // pOutput[u] = int16(s ? -int(m) : int(m));
+
+        } // For
         return v;
     }
-//}
-// ==== codec.c END =====================================================================================================================
 
+    // ==== codec.c END =====================================================================================================================
+
+
+    // ==== vrfy.c BEGIN =====================================================================================================================
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
     function PQCLEAN_FALCON512_CLEAN_verify_raw(uint16[] memory c0,
                                                 int16[]  memory s2,
-                                                uint16[] memory h,
+                                                uint16[] memory pH,
                                                 uint32          logn,
                                                 uint16[] memory pWorkingStorageWords) public payable returns (int16 result)
     {
@@ -1410,7 +1410,7 @@ contract Falcon
 
         // Compute -s1 = s2*h - c0 mod phi mod q (in pWorkingStorageWords[]).
         mq_NTT(pWorkingStorageWords, logn);
-        mq_poly_montymul_ntt(pWorkingStorageWords, h, logn);
+        mq_poly_montymul_ntt(pWorkingStorageWords, pH, logn);
         mq_iNTT(pWorkingStorageWords, logn);
         mq_poly_sub(pWorkingStorageWords, c0, logn);
 
@@ -1418,9 +1418,10 @@ contract Falcon
         for (u = 0; u < n; u++)
         {
             int32 w;
+
             w = int32(pWorkingStorageWords[u]);
             w -= int32(Q & -(((Q >> 1) - uint32(w)) >> 31));
-            pWorkingStorageWords[u] = uint16(int16(w));
+            pWorkingStorageWords[u] = uint16(int16(w));   // ((int16_t *)pWorkingStorageWords)[u] = (int16_t)w;
         }
 
         // Signature is valid if and only if the aggregate (-s1,s2) vector is short enough.
@@ -1428,7 +1429,7 @@ contract Falcon
 
         return success;
     }
-//}
+
     // ==== vrfy.c END =====================================================================================================================
 
     // ==== pqclean.c BEGIN =====================================================================================================================
@@ -1469,6 +1470,7 @@ contract Falcon
             return FALCON_ERR_SIZE + (-20);
         }
 
+        // Enclosed in block in order to create a tighter scope for local vars and hence reduce stack usage.
         {
             // First byte should have the form "0cc1nnnn"
             uint8 sig_bits_cc   = (uint8(pSignatureBuf[0]) >> 5) & 0x03;
@@ -1505,6 +1507,7 @@ contract Falcon
         }
 
 
+        // Enclosed in block in order to create a tighter scope for local vars and hence reduce stack usage.
         {
             // First byte should have the form "0000nnnn"
             uint8 pubkey_bits_0000 = uint8(pPublicKey[0]) >> 4;
@@ -1512,7 +1515,6 @@ contract Falcon
             uint8 sig_bits_nnnn    = uint8(pSignatureBuf[0]) & 0x0F;
 
             // RULE: Public Key must have the correct length
-            //if (cbPublicKey != 897)
             if (cbPublicKey != falconPubkeySize(pubKey_bits_nnnn) )
             {
                 return FALCON_ERR_SIZE + (-80);
@@ -1550,20 +1552,25 @@ contract Falcon
 
         // TODO: RULE: Message must have a length of more than zero
 
-        uint8[]   memory pNonce     = new uint8[](NONCELEN);         // uint8[NONCELEN] memory pNonce;
-        uint16[]  memory pWordArrayH;              // uint16[512]
-        int16[]   memory pSignedWordArraySig;      // int16[512]
+        ////////////////////////////////////////////////
+        // Start of Verification Proper
+        ////////////////////////////////////////////////
 
-        pWordArrayH              = new uint16[](512);  // uint16[512]
-        pSignedWordArraySig      = new int16[](512);   // int16[512]
+        uint8[]   memory pNonce  = new uint8[](NONCELEN);  // uint8[NONCELEN] memory pNonce;
+        uint16[]  memory pWordArrayH;                      // uint16[512]
+        int16[]   memory pSignedWordArraySig;              // int16[512]
+
+        pWordArrayH              = new uint16[](512);      // uint16[512]
+        pSignedWordArraySig      = new int16[](512);       // int16[512]
 
         int16 rc = FALCON_ERR_UNDEFINED;
 
         {
-            uint32         sigDataLen = cbSignatureBuf - 1 - NONCELEN; // uint8[sigDataLen] storage sigData;
-            uint8[] memory sigData    = new uint8[](g_SIGBUFLEN);      // uint8[g_SIGBUFLEN] memory sigData;
+            uint32         cbSignatureProper = cbSignatureBuf - 1 - NONCELEN; // uint8[cbSignatureProper] storage pSignatureProper;
+            uint8[] memory pSignatureProper = new uint8[](g_SIGBUFLEN);      // uint8[g_SIGBUFLEN] memory pSignatureProper;
 
             // Separate Nonce and Signature
+            // Enclosed in block in order to create a tighter scope for local vars and hence reduce stack usage.
             {
                 uint ii;
                 uint sourceOffset = 1;
@@ -1573,17 +1580,17 @@ contract Falcon
                 }
 
                 sourceOffset = 1 + NONCELEN;
-                for (ii=0; ii<sigDataLen; ii++)
+                for (ii=0; ii<cbSignatureProper; ii++)
                 {
-                    sigData[ii] = uint8(pSignatureBuf[sourceOffset + ii]);
+                    pSignatureProper[ii] = uint8(pSignatureBuf[sourceOffset + ii]);
                 }
             }
 
 
             ////////////////////////////////////////
             // static int do_verify(const uint8_t*  pNonce,
-            //                      const uint8_t*  sigData,
-            //                      size_t          sigDataLen,
+            //                      const uint8_t*  pSignatureProper,
+            //                      size_t          cbSignatureProper,
             //                      const uint8_t*  pMessage,
             //                      size_t          cbMessage,
             //                      const uint8_t*  pPublicKey)
@@ -1598,25 +1605,29 @@ contract Falcon
             if (sz1 != PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1)
             {
                 if (rc == FALCON_ERR_UNDEFINED)
-                   rc = FALCON_ERR_BADSIG + (-130);
-                //return rc;  // It may make no sense to carry on, but for that gas estimate, we will try...
+                    rc = FALCON_ERR_BADSIG + (-130);
+                return rc;
             }
-
+            // JG: pWordArrayH now contains decoded public key
             PQCLEAN_FALCON512_CLEAN_to_ntt_monty(pWordArrayH, 9);
+            // JG: pWordArrayH now contains montified decoded public key
+
 
             ///////////////////////////////////////////////
             // Decode signature.
-            sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(pSignedWordArraySig, 9, sigData, uint16(sigDataLen));
-            if (sz2 != uint16(sigDataLen))
+            sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(pSignedWordArraySig, 9, pSignatureProper, uint16(cbSignatureProper));
+            if (sz2 != uint16(cbSignatureProper))
             {
                 if (rc == FALCON_ERR_UNDEFINED)
                     rc = FALCON_ERR_BADSIG + (-140);
-                //return rc;  // It may make no sense to carry on, but for that gas estimate, we will try...
+                return rc;
             }
         }
+        // JG: pSignedWordArraySig now contains the decoded signature
 
-        uint16[]  memory pWordArrayWorkingStorage; // uint8[2*512]
-        uint16[]  memory pWordArrayHm;             // uint16[512]
+
+        uint16[]  memory pWordArrayWorkingStorage;     // uint8[2*512]
+        uint16[]  memory pWordArrayHm;                 // uint16[512]
 
         pWordArrayWorkingStorage = new uint16[](512);  // uint8[2*512]
         pWordArrayHm             = new uint16[](512);  // uint16[512]
@@ -1630,7 +1641,6 @@ contract Falcon
         PQCLEAN_FALCON512_CLEAN_hash_to_point_ct(pWordArrayHm, 9, pWordArrayWorkingStorage);
         OQS_SHA3_shake256_inc_ctx_release();
 
-
         // RULE: Signature Validation should succeed if all fields are valid
 
         ///////////////////////////////////////////////
@@ -1640,7 +1650,7 @@ contract Falcon
         {
             if (rc == FALCON_ERR_UNDEFINED)
                 rc = FALCON_ERR_BADSIG + (-150);
-            //return rc;  // It may make no sense to carry on, but for that gas estimate, we will try...
+            return rc;
         }
 
         if (rc == FALCON_ERR_UNDEFINED)
@@ -1649,9 +1659,7 @@ contract Falcon
         return rc;
     }
 
-
-
-
     // ==== pqclean.c END =====================================================================================================================
 
 } // End of Contract
+
