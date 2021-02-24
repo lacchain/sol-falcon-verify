@@ -24,7 +24,7 @@ contract("Falcon", accounts => {
 
             //console.log('signature[%d]: %s\nmessage[%d]: %s\npk[897]: %s', signatureLength, signatureBuffer.toString('hex'), messageLength, messageBuffer.toString('hex'), publicKeyBuffer.toString('hex'));
 
-            const contractReturn = await falcon.verify.call(0, Array.from(signatureBuffer), signatureLength, Array.from(messageBuffer), messageLength, Array.from(publicKeyBuffer), 897);
+            const contractReturn = await falcon.verify.call(1, Array.from(signatureBuffer), signatureLength, Array.from(messageBuffer), messageLength, Array.from(publicKeyBuffer), 897);
             assert.equal(getFalconReturnValue(contractReturn), 0, `Reason: ${getReasonCode(contractReturn)}`);
           }));
         });
