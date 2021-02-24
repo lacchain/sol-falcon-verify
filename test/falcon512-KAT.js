@@ -1,6 +1,7 @@
 const fs = require('fs');
 const readline = require('readline');
 const Test = require('mocha/lib/test');
+const falcConsts = require('./falcon_constants.js');
 const Falcon = artifacts.require("Falcon");
 
 contract("Falcon", accounts => {
@@ -25,7 +26,8 @@ contract("Falcon", accounts => {
             //console.log('signature[%d]: %s\nmessage[%d]: %s\npk[897]: %s', signatureLength, signatureBuffer.toString('hex'), messageLength, messageBuffer.toString('hex'), publicKeyBuffer.toString('hex'));
 
             const contractReturn = await falcon.verify.call(1, Array.from(signatureBuffer), signatureLength, Array.from(messageBuffer), messageLength, Array.from(publicKeyBuffer), 897);
-            assert.equal(getFalconReturnValue(contractReturn), 0, `Reason: ${getReasonCode(contractReturn)}`);
+            const falconReturn = getFalconReturnValue(contractReturn);
+            assert.equal(falconReturn, 0, `${falcConsts.FALCON_ERR_LongDescription[Math.abs(falconReturn)]}`);
           }));
         });
       });
