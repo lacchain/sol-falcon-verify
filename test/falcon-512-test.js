@@ -1,27 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 
+var assert = require('assert');
+
 const falcConsts = require('./falcon_constants.js');
 const kestrelDataset = require('./falcon_dataset_from_kestrel.js');
 
 const falconContract = artifacts.require("Falcon");
-
-var assert = require('assert');
-
-function getReasonCode(ret)
-{
-    var isNegative = false;
-    if (ret < 0)
-    {
-        isNegative = true;
-        ret = Math.abs(ret);
-    }
-    var remainder = ret % 10;
-    var quotient = ret - remainder; // or maybe Math.floor(ret/10) or trunc(ret/10)
-    if (isNegative)
-        quotient = -quotient;
-    return quotient;
-}
 
 
 function getFalconReturnValue(ret)
@@ -36,6 +21,22 @@ function getFalconReturnValue(ret)
     if (isNegative)
         remainder = -remainder;
     return remainder;
+}
+
+
+function getReasonCode(ret)
+{
+    var isNegative = false;
+    if (ret < 0)
+    {
+        isNegative = true;
+        ret = Math.abs(ret);
+    }
+    var remainder = ret % 10;
+    var quotient = ret - remainder; // or maybe Math.floor(ret/10) or trunc(ret/10)
+    if (isNegative)
+        quotient = -quotient;
+    return quotient;
 }
 
 
@@ -64,11 +65,11 @@ function strHex(s)
 
 contract("Falcon", accounts =>
 {
-    let falcon1;
+    let falconInstance;
 
     before(async () =>
     {
-        falcon1 = await falconContract.deployed();
+        falconInstance = await falconContract.deployed();
     });
 
     //it("has EIP-152 enabled", async () =>
@@ -98,13 +99,13 @@ contract("Falcon", accounts =>
 
             //let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
             let verifyArgs = [0, [1,2,3], 3, [1,2,3], 3, [1,2,3], 3];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -127,13 +128,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;     // new Uint8Array(pubKey);
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -160,13 +161,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -189,13 +190,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -218,13 +219,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -247,13 +248,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -280,13 +281,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -309,13 +310,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -338,13 +339,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -373,13 +374,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -405,13 +406,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -434,13 +435,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -466,13 +467,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
         // We cannot make any assumptions about the length of an unpadded compressed signature
@@ -499,13 +500,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -528,13 +529,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -560,13 +561,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -589,13 +590,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -621,13 +622,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
@@ -711,13 +712,13 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet) console.log(errorStr);
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
 
@@ -821,17 +822,17 @@ contract("Falcon", accounts =>
             const pubKey_array    = pubKey.toJSON().data;
 
             let verifyArgs = [signatureType, signature_array, signatureLen, message_array, messageLen, pubKey_array, pubKeyLen];
-            let ret = await falcon1.verify.call.apply(null, verifyArgs);
+            let ret = await falconInstance.verify.call.apply(null, verifyArgs);
             let errorReasonCode = getReasonCode(ret);
             ret = getFalconReturnValue(ret);
-            let errorStr = "ERROR: falcon1.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
+            let errorStr = "ERROR: falconInstance.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
             if (ret != expectedRet)
             {
                 console.log(errorStr);
             }
 
             assert.equal(ret, expectedRet, errorStr);
-            let tx = await falcon1.verify.sendTransaction.apply(null, verifyArgs);
+            let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
             assert.equal(tx.receipt.status, true);
         });
     });
