@@ -53,8 +53,6 @@ contract Falcon
 
     // From: pqclean.c                                                            // [2+4+4=10 bytes]
     uint16 constant private NONCELEN = 40;
-    uint32 constant private g_signatureLen = 658;
-    uint32 constant private g_SIGBUFLEN = g_signatureLen - 1 - NONCELEN;
 
     uint16[16] /*constant*/ private FALCON_PUBKEY_SIZE            = [5,5,8,15,29,57,113,225,449,897,1793,3585,7169,14337,28673,57345];
 
@@ -1021,9 +1019,9 @@ contract Falcon
 
     ////////////////////////////////////////
     // Name:        keccak_inc_finalize
-    // * Description: Finalizes Keccak absorb phase, prepares for squeezing
-    //  Arguments:   - uint32 r     : rate in bytes (e.g., 168 for SHAKE128)
-    //               - uint8 p      : domain-separation byte for different Keccak-derived functions
+    // Description: Finalizes Keccak absorb phase, prepares for squeezing
+    // Arguments:   - uint32 r     : rate in bytes (e.g., 168 for SHAKE128)
+    //              - uint8 p      : domain-separation byte for different Keccak-derived functions
     ////////////////////////////////////////
     function keccak_inc_finalize(uint32 r, uint8 p) public payable
     {
@@ -1566,13 +1564,16 @@ contract Falcon
         int16 rc = FALCON_ERR_UNDEFINED;
 
         {
-            uint32         cbSignatureProper = cbSignatureBuf - 1 - NONCELEN; // uint8[cbSignatureProper] storage pSignatureProper;
-            uint8[] memory pSignatureProper = new uint8[](g_SIGBUFLEN);      // uint8[g_SIGBUFLEN] memory pSignatureProper;
+            // cbSignatureBuf (supplied arg) typical value is in the order of 650 to 660,
+            // yielding cbSignatureProper in the order of 609 to 619.
+            uint32         cbSignatureProper = cbSignatureBuf - 1 - NONCELEN;
+            uint8[] memory pSignatureProper = new uint8[](cbSignatureProper);
 
             // Separate Nonce and Signature
             // Enclosed in block in order to create a tighter scope for local vars and hence reduce stack usage.
             {
                 uint ii;
+
                 uint sourceOffset = 1;
                 for (ii=0; ii<NONCELEN; ii++)
                 {
@@ -1585,7 +1586,6 @@ contract Falcon
                     pSignatureProper[ii] = uint8(pSignatureBuf[sourceOffset + ii]);
                 }
             }
-
 
             ////////////////////////////////////////
             // static int do_verify(const uint8_t*  pNonce,
@@ -1611,7 +1611,6 @@ contract Falcon
             // JG: pWordArrayH now contains decoded public key
             PQCLEAN_FALCON512_CLEAN_to_ntt_monty(pWordArrayH, 9);
             // JG: pWordArrayH now contains montified decoded public key
-
 
             ///////////////////////////////////////////////
             // Decode signature.
