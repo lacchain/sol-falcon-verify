@@ -9,18 +9,24 @@ on:
       - main
 
 jobs:
-  coverage:
+  test:
     runs-on: ubuntu-latest
+    services:
+      besu:
+        image: hyperledger/besu:21.1.2
+        env:
+          BESU_NETWORK: dev
+          BESU_MIN_GAS_PRICE: 0
+          BESU_LOGGING: DEBUG
+          BESU_MINER_ENABLED: true
+          BESU_MINER_COINBASE: fe3b557e8fb62b89f4916b721be55ceb828dbd73
+          BESU_RPC_HTTP_ENABLED: true
+          BESU_RPC_HTTP_HOST: 0.0.0.0
+          BESU_HOST_ALLOWLIST: "*"
+        ports:
+          - 8545:8545
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
-      - run: npm install --save-dev truffle
-      - run: npm install --save-dev solidity-coverage
-      - run: npx truffle run coverage
-  gas-reporter:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - run: npm install --save-dev truffle
-      - run: npm install --save-dev eth-gas-reporter
-      - run: npx truffle test
+      - run: npm install --no-save truffle @truffle/hdwallet-provider@1.2.6
+      - run: npx --no-install truffle test
