@@ -1,14 +1,12 @@
-#!/usr/bin/env node
-'use strict';
-
+const assert = require('assert');
+const hre = require("hardhat");
 const fs = require('fs');
 const readline = require('readline');
 const Test = require('mocha/lib/test');
 
 const falcConsts = require('./falcon_constants.js');
-const falconContract = artifacts.require("Falcon");
 
-contract("Falcon", accounts =>
+describe("Falcon", async () =>
 {
     const suite = describe("falcon512-KAT - Known Answer Tests", async () =>
     {
@@ -16,7 +14,8 @@ contract("Falcon", accounts =>
       before(async () =>
       {
         const kats = await parseKats(fs.createReadStream('test/falcon512-KAT.rsp'));
-        const falconInstance = await falconContract.deployed();
+        const Falcon = await hre.ethers.getContractFactory('Falcon')
+        falconInstance = await Falcon.deploy();
 
         //kats.slice(0, 5).forEach(kat =>  // Tests 0,1,2,3,4
         kats.forEach(kat =>  // All Tests
@@ -53,7 +52,7 @@ contract("Falcon", accounts =>
 
             if (1)
             {
-                const contractReturn = await falconInstance.verify.call(signatureType, Array.from(argSig), argSigLen, Array.from(msg), mlen, Array.from(pk), pklen);
+                const contractReturn = await falconInstance.callStatic.verify(signatureType, Array.from(argSig), argSigLen, Array.from(msg), mlen, Array.from(pk), pklen);
                 if (contractReturn != falcConsts.FALCON_ERR_SUCCESS)
                 {
                 	let ret = getFalconReturnValue(contractReturn);
@@ -71,14 +70,15 @@ contract("Falcon", accounts =>
                 const message_array   = msg.toJSON().data;
                 const pubKey_array    = pk.toJSON().data;
                 let verifyArgs = [signatureType, signature_array, argSigLen, message_array, mlen, pubKey_array, pklen];
-                let ret = await falconInstance.verify.call.apply(null, verifyArgs);
+                let ret = await falconInstance.callStatic.verify.apply(null, verifyArgs);
                 let errorReasonCode = getReasonCode(ret);
                 ret = getFalconReturnValue(ret);
                 let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
                 if (ret != expectedRet) console.log(errorStr);
                 assert.equal(ret, expectedRet, errorStr);
-                let tx = await falconInstance.verify.sendTransaction.apply(null, verifyArgs);
-                assert.equal(tx.receipt.status, true);
+                let tx = await falconInstance.verify.apply(null, verifyArgs);
+                let receipt = await tx.wait();
+                assert.equal(receipt.status, true);
             }
           }));
         });
