@@ -1,4 +1,5 @@
 require("@nomiclabs/hardhat-ethers");
+const { INFURA_API_KEY, MNEMONIC } = process.env;
 
 module.exports = {
   networks: {
@@ -13,12 +14,19 @@ module.exports = {
       gas: 0x1ffffffffffffe,
       gasPrice: 0,
       accounts: ["0xc87509a1c067bbde78beb793e6fa76530b6382a4c0241e5e4a9ec0a0f44dc0d3"]
+    },
+    goerli: {
+      url: '${INFURA_API_KEY}',
+      gas: 30_000_000,
+      accounts: {
+        mnemonic: '${MNEMONIC}',
+      },
     }
   },
   solidity: {
-    version: "0.7.6"
+    version: "0.7.6",
   },
   mocha: {
     timeout: 3_600_000
-  }
+  },
 };
