@@ -15,7 +15,7 @@ describe("Falcon", async () =>
       {
         const LibUtils = await hre.ethers.getContractFactory('LibUtils');
         const libUtils = await LibUtils.deploy();
-        const kats = await parseKats(fs.createReadStream('./falcon512-KAT.rsp'));
+        const kats = await parseKats(fs.createReadStream('./test/falcon512-KAT.rsp'));
         const Falcon = await hre.ethers.getContractFactory('Falcon', {
             libraries: {
                 LibUtils: libUtils.address,
