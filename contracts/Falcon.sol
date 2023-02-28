@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
+import {LibUtils} from "./libraries/Utils.sol";
+
 // Portions: Apache-2.0
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -14,9 +16,14 @@ pragma solidity ^0.7.0;
 // JGilmore (22/02/2021 12:37)
 ////////////////////////////////////////////////////////////////////////////////
 
-
 contract Falcon
 {
+    // ***************************************************************************
+    // ** Libraries
+    // ***************************************************************************
+
+    using LibUtils for *;
+
     // ***************************************************************************
     // ** STATE VARIABLES in 'storage'
     // ** CONSTANTS
@@ -379,11 +386,6 @@ contract Falcon
         5421,  5231,  6473,   436,  7567,  8603,  6229,  8230
     ];
 
-    // ***************************************************************************
-    // ** STATE VARIABLES in 'storage'
-    // ** VARIABLES
-    // ***************************************************************************
-
     // From: sha3_c.c
     // Space to hold the state of the SHAKE-256 incremental hashing API.
     // uint64[26]: Input/Output incremental state
@@ -417,26 +419,6 @@ contract Falcon
     uint32 private stackvar_mq_iNTT_m;
     uint32 private stackvar_mq_iNTT_ni;
 
-    // --------------------------------------------------------------------
-    // [ConstantsTotal=10+6+10+22+192+16+2048+2048=4352 bytes]
-    // [VariablesTotal=208+480+16=704 bytes]
-    // [StorageTotal=4352+704=5056 bytes]
-    // --------------------------------------------------------------------
-
-
-    // ***************************************************************************
-    // ** IMPLEMENTATION: Utility functions
-    // ***************************************************************************
-
-    ////////////////////////////////////////
-    // Solidity implementation of the macro...
-    // #define ROL(a, offset) (((a) << (offset)) ^ ((a) >> (64 - (offset))))
-    ////////////////////////////////////////
-    function ROL(uint64 a, uint16 offset) private pure returns (uint64)
-    {
-        return (((a) << (offset)) ^ ((a) >> (64 - (offset))));
-    }
-
     ///////////////////////////////////////
     // Public key size (in bytes). The size is exact.
     // #define FALCON_PUBKEY_SIZE(logn) (((logn) <= 1 ? 4u : (7u << ((logn) - 2))) + 1)
@@ -449,120 +431,63 @@ contract Falcon
     }
 
 
-// ==== vrfy.c BEGIN =====================================================================================================================
+    // ////////////////////////////////////////
+    // // Montgomery squaring (computes (x^2)/R).
+    // ////////////////////////////////////////
+    // function mq_montysqr(uint32 x) private pure returns (uint32 result)
+    // {
+    //     return LibUtils.mq_montymul(x, x);
+    // }
 
-    //////////////////////////////////////////////////////////////////
-    // Functions that do arithmetic on scalars
-    //////////////////////////////////////////////////////////////////
+    // ////////////////////////////////////////
+    // // Divide x by y modulo q = 12289.
+    // ////////////////////////////////////////
+    // function mq_div_12289(uint32 x, uint32 y) private pure returns (uint32 result)
+    // {
+    // /*$off*/
+    //     uint32    y0;
+    //     uint32    y1;
+    //     uint32    y2;
+    //     uint32    y3;
+    //     uint32    y4;
+    //     uint32    y5;
+    //     uint32    y6;
+    //     uint32    y7;
+    //     uint32    y8;
+    //     uint32    y9;
+    //     uint32    y10;
+    //     uint32    y11;
+    //     uint32    y12;
+    //     uint32    y13;
+    //     uint32    y14;
+    //     uint32    y15;
+    //     uint32    y16;
+    //     uint32    y17;
+    //     uint32    y18;
+    // /*$on*/
 
-    ////////////////////////////////////////
-    // Addition modulo q. Operands must be in the 0..q-1 range.
-    ////////////////////////////////////////
-    function mq_add(uint32 x, uint32 y) private pure returns (uint32 result)
-    {
-        uint32    d;
+    //     y0 = LibUtils.mq_montymul(y, R2);
+    //     y1 = LibUtils.mq_montysqr(y0);
+    //     y2 = LibUtils.mq_montymul(y1, y0);
+    //     y3 = LibUtils.mq_montymul(y2, y1);
+    //     y4 = LibUtils.mq_montysqr(y3);
+    //     y5 = LibUtils.mq_montysqr(y4);
+    //     y6 = LibUtils.mq_montysqr(y5);
+    //     y7 = LibUtils.mq_montysqr(y6);
+    //     y8 = LibUtils.mq_montysqr(y7);
+    //     y9 = LibUtils.mq_montymul(y8, y2);
+    //     y10 = LibUtils.mq_montymul(y9, y8);
+    //     y11 = LibUtils.mq_montysqr(y10);
+    //     y12 = LibUtils.mq_montysqr(y11);
+    //     y13 = LibUtils.mq_montymul(y12, y9);
+    //     y14 = LibUtils.mq_montysqr(y13);
+    //     y15 = LibUtils.mq_montysqr(y14);
+    //     y16 = LibUtils.mq_montymul(y15, y10);
+    //     y17 = LibUtils.mq_montysqr(y16);
+    //     y18 = LibUtils.mq_montymul(y17, y0);
 
-        d = x + y - Q;
-        d += Q & -(d >> 31);
-        result = d;
-    }
-
-    ////////////////////////////////////////
-    // Subtraction modulo q. Operands must be in the 0..q-1 range.
-    ////////////////////////////////////////
-    function mq_sub(uint32 x, uint32 y) private pure returns (uint32 result)
-    {
-         // As in mq_add(), we use a conditional addition to ensure the result is in the 0..q-1 range.
-        uint32    d;
-
-        d = x - y;
-        d += Q & -(d >> 31);
-        return d;
-    }
-
-    ////////////////////////////////////////
-    // Division by 2 modulo q. Operand must be in the 0..q-1 range.
-    ////////////////////////////////////////
-    function mq_rshift1(uint32 x) private pure returns (uint32 result)
-    {
-        x += Q & -(x & 1);
-        return (x >> 1);
-    }
-
-    ////////////////////////////////////////
-    // Montgomery multiplication modulo q. If we set R = 2^16 mod q, then this function computes: x * y / R mod q
-    // Operands must be in the 0..q-1 range.
-    ////////////////////////////////////////
-    function mq_montymul(uint32 x, uint32 y) private pure returns (uint32 result)
-    {
-        uint32    z;
-        uint32    w;
-
-        z = x * y;
-        w = ((z * Q0I) & 0xFFFF) * Q;
-        z = (z + w) >> 16;
-        z -= Q;
-        z += Q & -(z >> 31);
-        return z;
-    }
-
-    ////////////////////////////////////////
-    // Montgomery squaring (computes (x^2)/R).
-    ////////////////////////////////////////
-    function mq_montysqr(uint32 x) private pure returns (uint32 result)
-    {
-        return mq_montymul(x, x);
-    }
-
-    ////////////////////////////////////////
-    // Divide x by y modulo q = 12289.
-    ////////////////////////////////////////
-    function mq_div_12289(uint32 x, uint32 y) private pure returns (uint32 result)
-    {
-    /*$off*/
-        uint32    y0;
-        uint32    y1;
-        uint32    y2;
-        uint32    y3;
-        uint32    y4;
-        uint32    y5;
-        uint32    y6;
-        uint32    y7;
-        uint32    y8;
-        uint32    y9;
-        uint32    y10;
-        uint32    y11;
-        uint32    y12;
-        uint32    y13;
-        uint32    y14;
-        uint32    y15;
-        uint32    y16;
-        uint32    y17;
-        uint32    y18;
-    /*$on*/
-
-        y0 = mq_montymul(y, R2);
-        y1 = mq_montysqr(y0);
-        y2 = mq_montymul(y1, y0);
-        y3 = mq_montymul(y2, y1);
-        y4 = mq_montysqr(y3);
-        y5 = mq_montysqr(y4);
-        y6 = mq_montysqr(y5);
-        y7 = mq_montysqr(y6);
-        y8 = mq_montysqr(y7);
-        y9 = mq_montymul(y8, y2);
-        y10 = mq_montymul(y9, y8);
-        y11 = mq_montysqr(y10);
-        y12 = mq_montysqr(y11);
-        y13 = mq_montymul(y12, y9);
-        y14 = mq_montysqr(y13);
-        y15 = mq_montysqr(y14);
-        y16 = mq_montymul(y15, y10);
-        y17 = mq_montysqr(y16);
-        y18 = mq_montymul(y17, y0);
-
-        return mq_montymul(y18, x);
-    }
+    //     return LibUtils.mq_montymul(y18, x);
+    // }
 
 
     // ------------------------------------------------------------------------------------------------------------------------
@@ -605,9 +530,9 @@ contract Falcon
                     uint32 v;
 
                     u = pWordArray[j];
-                    v = mq_montymul(pWordArray[j + ht], s);
-                    pWordArray[j]      = uint16(mq_add(u, v));
-                    pWordArray[j + ht] = uint16(mq_sub(u, v));
+                    v = LibUtils.mq_montymul(pWordArray[j + ht], s);
+                    pWordArray[j]      = uint16(LibUtils.mq_add(u, v));
+                    pWordArray[j + ht] = uint16(LibUtils.mq_sub(u, v));
                 }
                 j1 += t;
             }
@@ -650,10 +575,10 @@ contract Falcon
 
                     u = pWordArray[j];
                     v = pWordArray[j + stackvar_mq_iNTT_t];
-                    pWordArray[j] = uint16(mq_add(u, v));
+                    pWordArray[j] = uint16(LibUtils.mq_add(u, v));
 
-                    w = mq_sub(u, v);
-                    pWordArray[j + stackvar_mq_iNTT_t] = uint16(mq_montymul(w, s));
+                    w = LibUtils.mq_sub(u, v);
+                    pWordArray[j + stackvar_mq_iNTT_t] = uint16(LibUtils.mq_montymul(w, s));
                 }
                 j1 += dt;
             }
@@ -665,62 +590,14 @@ contract Falcon
         stackvar_mq_iNTT_ni = R;
         for (stackvar_mq_iNTT_m = stackvar_mq_iNTT_n; stackvar_mq_iNTT_m > 1; stackvar_mq_iNTT_m >>= 1)
         {
-            stackvar_mq_iNTT_ni = mq_rshift1(stackvar_mq_iNTT_ni);
+            stackvar_mq_iNTT_ni = LibUtils.mq_rshift1(stackvar_mq_iNTT_ni);
         }
 
         for (stackvar_mq_iNTT_m = 0; stackvar_mq_iNTT_m < stackvar_mq_iNTT_n; stackvar_mq_iNTT_m++)
         {
-            pWordArray[stackvar_mq_iNTT_m] = uint16(mq_montymul(pWordArray[stackvar_mq_iNTT_m], stackvar_mq_iNTT_ni));
+            pWordArray[stackvar_mq_iNTT_m] = uint16(LibUtils.mq_montymul(pWordArray[stackvar_mq_iNTT_m], stackvar_mq_iNTT_ni));
         }
     }
-
-    ////////////////////////////////////////
-    // Convert a polynomial (mod q) to Montgomery representation.
-    ////////////////////////////////////////
-    function mq_poly_tomonty(uint16[] memory pWordArrayF, uint32 logn) private pure
-    {
-        uint32  u;
-        uint32  n;
-
-        n = uint32(1) << logn;
-        for (u = 0; u < n; u++)
-        {
-            pWordArrayF[u] = uint16(mq_montymul(pWordArrayF[u], R2));
-        }
-    }
-
-    ////////////////////////////////////////
-    // Multiply two polynomials together (NTT representation, and using
-    // a Montgomery multiplication). Result f*g is written over f.
-    ////////////////////////////////////////
-    function mq_poly_montymul_ntt(uint16[] memory pWordArrayF, uint16[] memory pWordArrayG, uint32 logn) private pure
-    {
-        uint32  u;
-        uint32  n;
-
-        n = uint32(1) << logn;
-        for (u = 0; u < n; u++)
-        {
-            pWordArrayF[u] = uint16(mq_montymul(pWordArrayF[u], pWordArrayG[u]));
-        }
-    }
-
-    ////////////////////////////////////////
-    // Subtract polynomial g from polynomial f.
-    ////////////////////////////////////////
-    function mq_poly_sub(uint16[] memory pWordArrayF, uint16[] memory pWordArrayG, uint32 logn) private pure
-    {
-        uint32  u;
-        uint32  n;
-
-        n = uint32(1) << logn;
-        for (u = 0; u < n; u++)
-        {
-            pWordArrayF[u] = uint16(mq_sub(pWordArrayF[u], pWordArrayG[u]));
-        }
-    }
-
-    /* ===================================================================== */
 
     ////////////////////////////////////////
     //
@@ -728,7 +605,7 @@ contract Falcon
     function PQCLEAN_FALCON512_CLEAN_to_ntt_monty(uint16[] memory pWordArrayH, uint32 logn) public view
     {
         mq_NTT(pWordArrayH, logn);
-        mq_poly_tomonty(pWordArrayH, logn);
+        LibUtils.mq_poly_tomonty(pWordArrayH, logn);
     }
 
 
@@ -743,11 +620,68 @@ contract Falcon
     // KeccakF1600_StatePermute()
     // Input parameters supplied in member variable shake256_context64.
     // Output values are written to the same member variable.
+    // @ NOTE: The implementation has been updated by Mulliganaceous, but not tested for compile errors.
     ////////////////////////////////////////
+
+    function perform_KeccakF1600Round(uint64[5][5] memory A, uint64[5][5] memory E, uint64[5] memory BC, uint64[5] memory D, uint8[5][5] memory G) public {
+        /* Mulliganaceous' modified Keccak function */
+        // Produce the initial BC and D vector
+        for (uint8 k = 0; k < 5; k++)
+            BC[k] = (A[0][k] ^ A[1][k] ^ A[2][k] ^ A[3][k] ^ A[4][k]);
+        for (uint8 k = 0; k < 5; k++)
+            D[k] = BC[(k - 1) % 5] ^ ((BC[(k + 1) % 5] << uint64(1)) ^ (BC[(k + 1) % 5] >> (63)));
+            
+        // // Ex: Note k is from {a,e,i,o,u} or {b,g,k,m,s}
+        uint8 offset = 0;
+        for (uint8 j = 0; j < 5; j++) {
+            for (uint8 k = 0; k < 5; k++) {
+                uint8 koffset = (k + offset) % 5;
+                A[k][koffset] ^= D[koffset];
+                BC[k] = (A[k][koffset] << G[k][koffset]) ^ (A[k][koffset] >> (64 - G[k][koffset]));
+            }
+            for (uint8 k = 0; k < 5; k++) {
+                uint8 koffset = (k + offset) % 5;
+                E[j][k] = BC[k] ^ (~BC[(k + 1)%5] & BC[(k + 2)%5]);
+            }
+            offset += 3;
+        }
+    }
+
     function KeccakF1600_StatePermute() public payable
     {
-        int         round;
+        // Deep copy A
+        uint64[5][5] memory A; 
+        for (uint i = 0; i < 5; i++) {
+            for (uint j = 0; j < 5; j++) {
+                A[i][j] = shake256_context64[5*i + j];
+            }
+        }
+        uint8[5][5] memory G = [[ 0, 1,62,28,27],
+                       [36,44, 6,55,20],
+                       [ 3,10,43,25,39],
+                       [41,45,15,21, 8],
+                       [18, 2,61,56,14]];
+        uint64[5][5] memory E;
+        uint64[5] memory BC;
+        uint64[5] memory D;
 
+        // Perform loops
+        for (int16 round = 0; round < NROUNDS; round += 2) {
+            perform_KeccakF1600Round(A, E, BC, D, G);
+            E[0][0] ^= KeccakF_RoundConstants[uint256(round)];
+            perform_KeccakF1600Round(E, A, BC, D, G);
+            A[0][0] ^= KeccakF_RoundConstants[uint256(round + 1)];
+        }
+
+        // Copy back
+        for (uint i = 0; i < 5; i++) {
+            for (uint8 j = 0; j < 5; j++) {
+                shake256_context64[5*i + j] = A[i][j];
+            }
+        }
+
+    /*  NOT USED ANYMORE
+        int         round;
         // copyFromState(A, state)
         Aba = shake256_context64[ 0]; Abe = shake256_context64[ 1]; Abi = shake256_context64[ 2]; Abo = shake256_context64[ 3]; Abu = shake256_context64[ 4];
         Aga = shake256_context64[ 5]; Age = shake256_context64[ 6]; Agi = shake256_context64[ 7]; Ago = shake256_context64[ 8]; Agu = shake256_context64[ 9];
@@ -757,7 +691,7 @@ contract Falcon
 
         for (round = 0; round < NROUNDS; round += 2)
         {
-            //////////////////////////////////////////////////
+            ////////////////////////////////////////////////
             // prepareTheta
             BCa = Aba ^ Aga ^ Aka ^ Ama ^ Asa;
             BCe = Abe ^ Age ^ Ake ^ Ame ^ Ase;
@@ -767,22 +701,22 @@ contract Falcon
 
             //////////////////////////////////////////////////
             // thetaRhoPiChiIotaPrepareTheta(round  , A, E)
-            Da = BCu ^ ROL(BCe, 1);
-            De = BCa ^ ROL(BCi, 1);
-            Di = BCe ^ ROL(BCo, 1);
-            Do = BCi ^ ROL(BCu, 1);
-            Du = BCo ^ ROL(BCa, 1);
+            Da = BCu ^ ((BCe) << (1)) ^ ((BCe) >> (64 - (1)));
+            De = BCa ^ ((BCi) << (1)) ^ ((BCi) >> (64 - (1)));
+            Di = BCe ^ ((BCo) << (1)) ^ ((BCo) >> (64 - (1)));
+            Do = BCi ^ ((BCu) << (1)) ^ ((BCu) >> (64 - (1)));
+            Du = BCo ^ ((BCa) << (1)) ^ ((BCa) >> (64 - (1)));
             Aba ^= Da;
             BCa = Aba;
 
             Age ^= De;
-            BCe = ROL(Age, 44);
+            BCe = ((Age) << (44)) ^ ((Age) >> (64 - (44)));
             Aki ^= Di;
-            BCi = ROL(Aki, 43);
+            BCi = ((Aki) << (43)) ^ ((Aki) >> (64 - (43)));
             Amo ^= Do;
-            BCo = ROL(Amo, 21);
+            BCo = ((Amo) << (21)) ^ ((Amo) >> (64 - (21)));
             Asu ^= Du;
-            BCu = ROL(Asu, 14);
+            BCu = ((Asu) << (14)) ^ ((Asu) >> (64 - (14)));
             Eba = BCa ^ ((~BCe) & BCi);
             Eba ^= KeccakF_RoundConstants[uint256(round)];
             Ebe = BCe ^ ((~BCi) & BCo);
@@ -791,15 +725,15 @@ contract Falcon
             Ebu = BCu ^ ((~BCa) & BCe);
 
             Abo ^= Do;
-            BCa = ROL(Abo, 28);
+            BCa = ((Abo) << (28)) ^ ((Abo) >> (64 - (28)));
             Agu ^= Du;
-            BCe = ROL(Agu, 20);
+            BCe = ((Agu) << (20)) ^ ((Agu) >> (64 - (20)));
             Aka ^= Da;
-            BCi = ROL(Aka, 3);
+            BCi = ((Aka) << (3)) ^ ((Aka) >> (64 - (3)));
             Ame ^= De;
-            BCo = ROL(Ame, 45);
+            BCo = ((Ame) << (45)) ^ ((Ame) >> (64 - (45)));
             Asi ^= Di;
-            BCu = ROL(Asi, 61);
+            BCu = ((Asi) << (61)) ^ ((Asi) >> (64 - (61)));
             Ega = BCa ^ ((~BCe) & BCi);
             Ege = BCe ^ ((~BCi) & BCo);
             Egi = BCi ^ ((~BCo) & BCu);
@@ -807,15 +741,15 @@ contract Falcon
             Egu = BCu ^ ((~BCa) & BCe);
 
             Abe ^= De;
-            BCa = ROL(Abe, 1);
+            BCa = ((Abe) << (1)) ^ ((Abe) >> (64 - (1)));
             Agi ^= Di;
-            BCe = ROL(Agi, 6);
+            BCe = ((Agi) << (6)) ^ ((Agi) >> (64 - (6)));
             Ako ^= Do;
-            BCi = ROL(Ako, 25);
+            BCi = ((Ako) << (25)) ^ ((Ako) >> (64 - (25)));
             Amu ^= Du;
-            BCo = ROL(Amu, 8);
+            BCo = ((Amu) << (8)) ^ ((Amu) >> (64 - (8)));
             Asa ^= Da;
-            BCu = ROL(Asa, 18);
+            BCu = ((Asa) << (18)) ^ ((Asa) >> (64 - (18)));
             Eka = BCa ^ ((~BCe) & BCi);
             Eke = BCe ^ ((~BCi) & BCo);
             Eki = BCi ^ ((~BCo) & BCu);
@@ -823,15 +757,15 @@ contract Falcon
             Eku = BCu ^ ((~BCa) & BCe);
 
             Abu ^= Du;
-            BCa = ROL(Abu, 27);
+            BCa = ((Abu) << (27)) ^ ((Abu) >> (64 - (27)));
             Aga ^= Da;
-            BCe = ROL(Aga, 36);
+            BCe = ((Aga) << (36)) ^ ((Aga) >> (64 - (36)));
             Ake ^= De;
-            BCi = ROL(Ake, 10);
+            BCi = ((Ake) << (10)) ^ ((Ake) >> (64 - (10)));
             Ami ^= Di;
-            BCo = ROL(Ami, 15);
+            BCo = ((Ami) << (15)) ^ ((Ami) >> (64 - (15)));
             Aso ^= Do;
-            BCu = ROL(Aso, 56);
+            BCu = ((Aso) << (56)) ^ ((Aso) >> (64 - (56)));
             Ema = BCa ^ ((~BCe) & BCi);
             Eme = BCe ^ ((~BCi) & BCo);
             Emi = BCi ^ ((~BCo) & BCu);
@@ -839,15 +773,15 @@ contract Falcon
             Emu = BCu ^ ((~BCa) & BCe);
 
             Abi ^= Di;
-            BCa = ROL(Abi, 62);
+            BCa = ((Abi) << (62)) ^ ((Abi) >> (64 - (62)));
             Ago ^= Do;
-            BCe = ROL(Ago, 55);
+            BCe = ((Ago) << (55)) ^ ((Ago) >> (64 - (55)));
             Aku ^= Du;
-            BCi = ROL(Aku, 39);
+            BCi = ((Aku) << (39)) ^ ((Aku) >> (64 - (39)));
             Ama ^= Da;
-            BCo = ROL(Ama, 41);
+            BCo = ((Ama) << (41)) ^ ((Ama) >> (64 - (41)));
             Ase ^= De;
-            BCu = ROL(Ase, 2);
+            BCu = ((Ase) << (2)) ^ ((Ase) >> (64 - (2)));
             Esa = BCa ^ ((~BCe) & BCi);
             Ese = BCe ^ ((~BCi) & BCo);
             Esi = BCi ^ ((~BCo) & BCu);
@@ -864,22 +798,22 @@ contract Falcon
 
             //////////////////////////////////////////////////
             // thetaRhoPiChiIotaPrepareTheta(round+1, E, A)
-            Da = BCu ^ ROL(BCe, 1);
-            De = BCa ^ ROL(BCi, 1);
-            Di = BCe ^ ROL(BCo, 1);
-            Do = BCi ^ ROL(BCu, 1);
-            Du = BCo ^ ROL(BCa, 1);
+            Da = BCu ^ ((BCe) << (1)) ^ ((BCe) >> (64 - (1)));
+            De = BCa ^ ((BCi) << (1)) ^ ((BCi) >> (64 - (1)));
+            Di = BCe ^ ((BCo) << (1)) ^ ((BCo) >> (64 - (1)));
+            Do = BCi ^ ((BCu) << (1)) ^ ((BCu) >> (64 - (1)));
+            Du = BCo ^ ((BCa) << (1)) ^ ((BCa) >> (64 - (1)));
             Eba ^= Da;
             BCa = Eba;
 
             Ege ^= De;
-            BCe = ROL(Ege, 44);
+            BCe = ((Ege) << (44)) ^ ((Ege) >> (64 - (44)));
             Eki ^= Di;
-            BCi = ROL(Eki, 43);
+            BCi = ((Eki) << (43)) ^ ((Eki) >> (64 - (43)));
             Emo ^= Do;
-            BCo = ROL(Emo, 21);
+            BCo = ((Emo) << (21)) ^ ((Emo) >> (64 - (21)));
             Esu ^= Du;
-            BCu = ROL(Esu, 14);
+            BCu = ((Esu) << (14)) ^ ((Esu) >> (64 - (14)));
             Aba = BCa ^ ((~BCe) & BCi);
             Aba ^= KeccakF_RoundConstants[uint256(round + 1)];
             Abe = BCe ^ ((~BCi) & BCo);
@@ -888,15 +822,15 @@ contract Falcon
             Abu = BCu ^ ((~BCa) & BCe);
 
             Ebo ^= Do;
-            BCa = ROL(Ebo, 28);
+            BCa = ((Ebo) << (28)) ^ ((Ebo) >> (64 - (28)));
             Egu ^= Du;
-            BCe = ROL(Egu, 20);
+            BCe = ((Egu) << (20)) ^ ((Egu) >> (64 - (20)));
             Eka ^= Da;
-            BCi = ROL(Eka, 3);
+            BCi = ((Eka) << (3)) ^ ((Eka) >> (64 - (3)));
             Eme ^= De;
-            BCo = ROL(Eme, 45);
+            BCo = ((Eme) << (45)) ^ ((Eme) >> (64 - (45)));
             Esi ^= Di;
-            BCu = ROL(Esi, 61);
+            BCu = ((Esi) << (61)) ^ ((Esi) >> (64 - (61)));
             Aga = BCa ^ ((~BCe) & BCi);
             Age = BCe ^ ((~BCi) & BCo);
             Agi = BCi ^ ((~BCo) & BCu);
@@ -904,15 +838,15 @@ contract Falcon
             Agu = BCu ^ ((~BCa) & BCe);
 
             Ebe ^= De;
-            BCa = ROL(Ebe, 1);
+            BCa = ((Ebe) << (1)) ^ ((Ebe) >> (64 - (1)));
             Egi ^= Di;
-            BCe = ROL(Egi, 6);
+            BCe = ((Egi) << (6)) ^ ((Egi) >> (64 - (6)));
             Eko ^= Do;
-            BCi = ROL(Eko, 25);
+            BCi = ((Eko) << (25)) ^ ((Eko) >> (64 - (25)));
             Emu ^= Du;
-            BCo = ROL(Emu, 8);
+            BCo = ((Emu) << (8)) ^ ((Emu) >> (64 - (8)));
             Esa ^= Da;
-            BCu = ROL(Esa, 18);
+            BCu = ((Esa) << (18)) ^ ((Esa) >> (64 - (18)));
             Aka = BCa ^ ((~BCe) & BCi);
             Ake = BCe ^ ((~BCi) & BCo);
             Aki = BCi ^ ((~BCo) & BCu);
@@ -920,15 +854,15 @@ contract Falcon
             Aku = BCu ^ ((~BCa) & BCe);
 
             Ebu ^= Du;
-            BCa = ROL(Ebu, 27);
+            BCa = ((Ebu) << (27)) ^ ((Ebu) >> (64 - (27)));
             Ega ^= Da;
-            BCe = ROL(Ega, 36);
+            BCe = ((Ega) << (36)) ^ ((Ega) >> (64 - (36)));
             Eke ^= De;
-            BCi = ROL(Eke, 10);
+            BCi = ((Eke) << (10)) ^ ((Eke) >> (64 - (10)));
             Emi ^= Di;
-            BCo = ROL(Emi, 15);
+            BCo = ((Emi) << (15)) ^ ((Emi) >> (64 - (15)));
             Eso ^= Do;
-            BCu = ROL(Eso, 56);
+            BCu = ((Eso) << (56)) ^ ((Eso) >> (64 - (56)));
             Ama = BCa ^ ((~BCe) & BCi);
             Ame = BCe ^ ((~BCi) & BCo);
             Ami = BCi ^ ((~BCo) & BCu);
@@ -936,15 +870,15 @@ contract Falcon
             Amu = BCu ^ ((~BCa) & BCe);
 
             Ebi ^= Di;
-            BCa = ROL(Ebi, 62);
+            BCa = ((Ebi) << (62)) ^ ((Ebi) >> (64 - (62)));
             Ego ^= Do;
-            BCe = ROL(Ego, 55);
+            BCe = ((Ego) << (55)) ^ ((Ego) >> (64 - (55)));
             Eku ^= Du;
-            BCi = ROL(Eku, 39);
+            BCi = ((Eku) << (39)) ^ ((Eku) >> (64 - (39)));
             Ema ^= Da;
-            BCo = ROL(Ema, 41);
+            BCo = ((Ema) << (41)) ^ ((Ema) >> (64 - (41)));
             Ese ^= De;
-            BCu = ROL(Ese, 2);
+            BCu = ((Ese) << (2)) ^ ((Ese) >> (64 - (2)));
             Asa = BCa ^ ((~BCe) & BCi);
             Ase = BCe ^ ((~BCi) & BCo);
             Asi = BCi ^ ((~BCo) & BCu);
@@ -958,6 +892,7 @@ contract Falcon
         shake256_context64[10] = Aka; shake256_context64[11] = Ake; shake256_context64[12] = Aki; shake256_context64[13] = Ako; shake256_context64[14] = Aku;
         shake256_context64[15] = Ama; shake256_context64[16] = Ame; shake256_context64[17] = Ami; shake256_context64[18] = Amo; shake256_context64[19] = Amu;
         shake256_context64[20] = Asa; shake256_context64[21] = Ase; shake256_context64[22] = Asi; shake256_context64[23] = Aso; shake256_context64[24] = Asu;
+        */
     }
 
     ////////////////////////////////////////
@@ -1221,162 +1156,6 @@ contract Falcon
         }
     }
 
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_is_short(uint16[] memory s1, int16[] memory s2, uint32 logn) public pure returns (int16)
-    {
-        uint32 n;
-        uint32 u;
-        uint32 s;
-        uint32 ng;
-
-        n = uint32(1) << logn;
-        s = 0;
-        ng = 0;
-        for (u = 0; u < n; u++)
-        {
-            uint16 z;
-
-            z = s1[u];
-            s += uint32(z * z);
-            ng |= s;
-
-            z = uint16(s2[u]);
-            s += uint32(z * z);
-            ng |= s;
-        }
-
-        s |= -(ng >> 31);
-
-        uint32 val = ((uint32(7085) * uint32(12289)) >> (10 - logn));
-        if (s < val)
-           return 1;
-        return 0; // //return s < ((uint32(7085) * uint32(12289)) >> (10 - logn));
-    }
-
-    // ==== common.c END =====================================================================================================================
-
-    // ==== codec.c BEGIN =====================================================================================================================
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_modq_decode(uint16[] memory pX, uint16 logn, uint8[] memory pInput, uint16 In_offset, uint16 cbInputMax)  public pure returns (uint16)
-    {
-        uint16        n;
-        uint16        In_len;
-        uint16        u;
-        uint16        buf_ndx;
-        uint16        acc;
-        uint16        acc_len;
-
-        n = uint16(1) << logn;
-        In_len = ((n * 14) + 7) >> 3;
-        if (In_len > cbInputMax)
-        {
-            return 0;
-        }
-
-        buf_ndx = 0;
-        acc     = 0;
-        acc_len = 0;
-        u       = 0;
-
-        while (u < n)
-        {
-            acc = (acc << 8) | uint16(uint8(pInput[In_offset + buf_ndx++]));   // acc = (acc << 8) | (*buf++);
-            acc_len += 8;
-            if (acc_len >= 14)
-            {
-                uint16 w;
-
-                acc_len -= 14;
-                w = (acc >> acc_len) & 0x3FFF;
-                if (w >= 12289)
-                {
-                    return 0;
-                }
-                pX[u++] = uint16(w);
-                u++;
-            }
-        }
-
-        if ((acc & ((uint32(1) << acc_len) - 1)) != 0)
-        {
-            return 0;
-        }
-
-        return In_len;
-    }
-
-    ////////////////////////////////////////
-    //
-    ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_comp_decode(int16[] memory pOutput, uint16 logn, uint8[] memory pInput, uint16 cbInputMax) public pure returns (uint16)
-    {
-        uint16  n;
-        uint16  u;
-        uint16  v;
-        uint32  acc;
-        uint16  acc_len;
-
-        n = uint16(1) << logn;
-
-        acc = 0;
-        acc_len = 0;
-        v = 0;
-
-        for (u = 0; u < n; u++)
-        {
-            uint16 b;
-            uint16 s;
-            uint16 m;
-
-            if (v >= cbInputMax)
-            {
-                return 0;
-            }
-
-            uint16 aaa = uint16(uint32(pInput[v++]));
-            acc = (acc << 8) | aaa;                          // acc = (acc << 8) | uint32(buf[v++]);
-
-            b = uint16(acc >> acc_len);
-            s = b & 128;
-            m = b & 127;
-
-            for (;;)
-            {
-                if (acc_len == 0)
-                {
-                    if (v >= cbInputMax)
-                    {
-                        return 0;
-                    }
-                    acc = (acc << 8) | uint32(pInput[v++]); // acc = (acc << 8) | uint32(buf[v++]);
-                    acc_len = 8;
-                }
-
-                acc_len--;
-                if (((acc >> acc_len) & 1) != 0)
-                {
-                    break;
-                }
-
-                m += 128;
-                if (m > 2047)
-                {
-                    return 0;
-                }
-            }
-
-            int16 val = int16((s!=0) ? -int(m) : int(m));
-            pOutput[u] = val;                               // pOutput[u] = int16(s ? -int(m) : int(m));
-
-        } // For
-        return v;
-    }
-
     // ==== codec.c END =====================================================================================================================
 
 
@@ -1408,9 +1187,9 @@ contract Falcon
 
         // Compute -s1 = s2*h - c0 mod phi mod q (in pWorkingStorageWords[]).
         mq_NTT(pWorkingStorageWords, logn);
-        mq_poly_montymul_ntt(pWorkingStorageWords, pH, logn);
+        LibUtils.mq_poly_montymul_ntt(pWorkingStorageWords, pH, logn);
         mq_iNTT(pWorkingStorageWords, logn);
-        mq_poly_sub(pWorkingStorageWords, c0, logn);
+        LibUtils.mq_poly_sub(pWorkingStorageWords, c0, logn);
 
         // Normalize -s1 elements into the [-q/2..q/2] range.
         for (u = 0; u < n; u++)
@@ -1423,7 +1202,7 @@ contract Falcon
         }
 
         // Signature is valid if and only if the aggregate (-s1,s2) vector is short enough.
-        int16 success = PQCLEAN_FALCON512_CLEAN_is_short(pWorkingStorageWords, s2, logn);
+        int16 success = LibUtils.PQCLEAN_FALCON512_CLEAN_is_short(pWorkingStorageWords, s2, logn);
 
         return success;
     }
@@ -1601,7 +1380,7 @@ contract Falcon
 
             ///////////////////////////////////////////////
             // Decode public key.
-            sz1 = PQCLEAN_FALCON512_CLEAN_modq_decode( pWordArrayH, 9, pPublicKey, 1, PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1);
+            sz1 = LibUtils.PQCLEAN_FALCON512_CLEAN_modq_decode( pWordArrayH, 9, pPublicKey, 1, PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1);
             if (sz1 != PQCLEAN_FALCON512_CLEAN_CRYPTO_PUBLICKEYBYTES - 1)
             {
                 if (rc == FALCON_ERR_UNDEFINED)
@@ -1614,7 +1393,7 @@ contract Falcon
 
             ///////////////////////////////////////////////
             // Decode signature.
-            sz2 = PQCLEAN_FALCON512_CLEAN_comp_decode(pSignedWordArraySig, 9, pSignatureProper, uint16(cbSignatureProper));
+            sz2 = LibUtils.PQCLEAN_FALCON512_CLEAN_comp_decode(pSignedWordArraySig, 9, pSignatureProper, uint16(cbSignatureProper));
             if (sz2 != uint16(cbSignatureProper))
             {
                 if (rc == FALCON_ERR_UNDEFINED)

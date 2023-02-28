@@ -13,8 +13,14 @@ describe("Falcon", async () =>
 
       before(async () =>
       {
-        const kats = await parseKats(fs.createReadStream('test/falcon512-KAT.rsp'));
-        const Falcon = await hre.ethers.getContractFactory('Falcon')
+        const LibUtils = await hre.ethers.getContractFactory('LibUtils');
+        const libUtils = await LibUtils.deploy();
+        const kats = await parseKats(fs.createReadStream('./test/falcon512-KAT.rsp'));
+        const Falcon = await hre.ethers.getContractFactory('Falcon', {
+            libraries: {
+                LibUtils: libUtils.address,
+            }
+        });
         falconInstance = await Falcon.deploy();
 
         //kats.slice(0, 5).forEach(kat =>  // Tests 0,1,2,3,4
