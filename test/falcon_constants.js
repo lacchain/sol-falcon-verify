@@ -42,6 +42,8 @@ const FALCON_SIG_3_CT         = 3; // Fixed-size format amenable to constant-tim
                                    // the 'CT' format also prevents information about the signature value and the signed data hash to leak through timing-based side channels (this feature is rarely needed).
 const FALCON_SIG_4_INVALID    = 4;
 
+const FALCON_PRECOMPILED_ADDRESS = "0x0000000000000000000000000000000000000014";
+
 module.exports = {
     FALCON_ERR_SUCCESS,
     FALCON_ERR_RANDOM,
@@ -56,7 +58,8 @@ module.exports = {
     FALCON_SIG_1_COMPRESSED,
     FALCON_SIG_2_PADDED,
     FALCON_SIG_3_CT,
-    FALCON_SIG_4_INVALID
+    FALCON_SIG_4_INVALID,
+    FALCON_PRECOMPILED_ADDRESS
 };
 
 

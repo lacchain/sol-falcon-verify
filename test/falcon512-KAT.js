@@ -6,91 +6,105 @@ const Test = require('mocha/lib/test');
 
 const falcConsts = require('./falcon_constants.js');
 
+async function callAndCheck(
+  signature_array,
+  pubKey_array,
+  message_array,
+  contractAddress,
+  isValid,
+  falconCommonInterface
+) {
+  let verifyArgs = [
+    signature_array,
+    pubKey_array,
+    message_array,
+    contractAddress,
+  ];
+
+  let ret = await falconCommonInterface.callStatic.verify.apply(
+    null,
+    verifyArgs
+  );
+  assert.equal(ret, isValid);
+}
+
+async function verifyKat(kat, falconCommonInterface, targetImplementationContractAddress) {
+  let signatureType = falcConsts.FALCON_SIG_1_COMPRESSED; // FALCON_SIG_0_INFERRED, FALCON_SIG_1_COMPRESSED, FALCON_SIG_2_PADDED, FALCON_SIG_3_CT
+  const msg   = Buffer.from(kat.msg, 'hex');
+  const mlen  = parseInt(kat.mlen);
+  const pk    = Buffer.from(kat.pk, 'hex');
+  const sm    = Buffer.from(kat.sm, 'hex');
+  const smlen = parseInt(kat.smlen);
+
+  // Deconstruct KAT sm field which is in "3.11.6 NIST API" format
+  const smSigLen     = sm.readInt16BE(0);                         // Convert a 2 byte BigEndian value to a number
+  const smNonce      = sm.slice(2, 42);                           // Skip over the 2 bytes for the smSigLen
+  const smMsg        = sm.slice(2 + 40, smlen-2-40-smSigLen);     // Not used - Should be identical to msg
+  const smSig        = sm.slice(2 + 40 + mlen);                   // Skip 2 bytes for signatureSize + 40 bytes for nonce + mlen bytes for message.
+  const smSigHdrByte = smSig.slice(0, 1);                         // Header Byte
+  const smSigRaw     = smSig.slice(1);                            // Raw Signature
+
+  // Construct Signature field to send to the contract which expects it in "3.11.3 Signatures" format
+  var argSigHdrBuf = Buffer.from([0x39]);
+  const argSig     = Buffer.concat([argSigHdrBuf, smNonce, smSigRaw]);
+
+  // calling both precompiled and solidity through a common interface.
+  const signature_array = Array.from(argSig);
+  const message_array = Array.from(msg);
+  const pubKey_array = Array.from(pk);
+  await callAndCheck(
+    signature_array,
+    pubKey_array,
+    message_array,
+    targetImplementationContractAddress,
+    true,
+    falconCommonInterface
+  );
+}
+
 describe("Falcon", async () =>
 {
     const suite = describe("falcon512-KAT - Known Answer Tests", async () =>
     {
+      let falconSolidityImpl;
+      let falconCommonInterface;
+      let falconInstance;
+      let precompiledContractAddress = falcConsts.FALCON_PRECOMPILED_ADDRESS;
 
       before(async () =>
       {
         const kats = await parseKats(fs.createReadStream('test/falcon512-KAT.rsp'));
         const Falcon = await hre.ethers.getContractFactory('Falcon')
+        const FalconSolidityImpl = await hre.ethers.getContractFactory(
+          "FalconWrap"
+        );
+        const FalconCommonInterface = await hre.ethers.getContractFactory(
+          "FalconInterface"
+        );
         falconInstance = await Falcon.deploy();
+        falconSolidityImpl = await FalconSolidityImpl.deploy();
+        const solidityFalconAddress = falconSolidityImpl.address;
+        falconCommonInterface = await FalconCommonInterface.deploy();
 
         //kats.slice(0, 5).forEach(kat =>  // Tests 0,1,2,3,4
         kats.forEach(kat =>  // All Tests
         {
-          suite.addTest(new Test(`KAT test ${kat.count}`, async() =>
+          suite.addTest(new Test(`KAT test ${kat.count} (solidity)`, async() =>
           {
-            let signatureType = falcConsts.FALCON_SIG_1_COMPRESSED; // FALCON_SIG_0_INFERRED, FALCON_SIG_1_COMPRESSED, FALCON_SIG_2_PADDED, FALCON_SIG_3_CT
-            const msg   = Buffer.from(kat.msg, 'hex');
-            const mlen  = parseInt(kat.mlen);
-            const pk    = Buffer.from(kat.pk, 'hex');
-            const pklen = pk.length;
-            const sm    = Buffer.from(kat.sm, 'hex');
-            const smlen = parseInt(kat.smlen);
+           await verifyKat(kat, falconCommonInterface, solidityFalconAddress); 
+          }));
 
-            // Deconstruct KAT sm field which is in "3.11.6 NIST API" format
-            const smSigLen     = sm.readInt16BE(0);                         // Convert a 2 byte BigEndian value to a number
-            const smNonce      = sm.slice(2, 42);                           // Skip over the 2 bytes for the smSigLen
-            const smMsg        = sm.slice(2 + 40, smlen-2-40-smSigLen);     // Not used - Should be identical to msg
-            const smSig        = sm.slice(2 + 40 + mlen);                   // Skip 2 bytes for signatureSize + 40 bytes for nonce + mlen bytes for message.
-            const smSigHdrByte = smSig.slice(0, 1);                         // Header Byte
-            const smSigRaw     = smSig.slice(1);                            // Raw Signature
-
-            // Construct Signature field to send to the contract which expects it in "3.11.3 Signatures" format
-            var argSigHdrBuf = Buffer.from([0x39]);
-            const argSig     = Buffer.concat([argSigHdrBuf, smNonce, smSigRaw]);
-            const argSigLen  = argSigHdrBuf.length + smNonce.length + smSigRaw.length;
-
-            //console.log("==> argSigHdrBuf[%d]: 0x%s", argSigHdrBuf.length, argSigHdrBuf.toString('hex'));
-            //console.log("==> smSigRawLen = smlen(%d) - smSigLen.len(2) - nonceNen(40) - mlen(%d) - sigHdrByte(1) = %d [%d]",
-            //                smlen, mlen,
-            //                (smlen - 2 - 40 - mlen - 1),
-            //                smSigRaw.length );
-            //console.log("==> argSig[%d]: 0x%s", argSigLen, argSig.toString('hex'));
-
-            if (1)
-            {
-                const contractReturn = await falconInstance.callStatic.verify(signatureType, Array.from(argSig), argSigLen, Array.from(msg), mlen, Array.from(pk), pklen);
-                if (contractReturn != falcConsts.FALCON_ERR_SUCCESS)
-                {
-                	let ret = getFalconReturnValue(contractReturn);
-                    let errorReasonCode = getReasonCode(contractReturn);
-                    let errorStr = "ERROR: falcon.verify returned " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
-                    console.log(errorStr);
-                }
-                const falconReturn = getFalconReturnValue(contractReturn);
-                assert.equal(falconReturn, falcConsts.FALCON_ERR_SUCCESS, `${falcConsts.FALCON_ERR_LongDescription[Math.abs(falconReturn)]}`);
-            }
-            else
-            {
-                let expectedRet = falcConsts.FALCON_ERR_SUCCESS;
-                const signature_array = argSig.toJSON().data;
-                const message_array   = msg.toJSON().data;
-                const pubKey_array    = pk.toJSON().data;
-                let verifyArgs = [signatureType, signature_array, argSigLen, message_array, mlen, pubKey_array, pklen];
-                let ret = await falconInstance.callStatic.verify.apply(null, verifyArgs);
-                let errorReasonCode = getReasonCode(ret);
-                ret = getFalconReturnValue(ret);
-                let errorStr = "ERROR: falcon.verify expected " + expectedRet + " (" + falcConsts.FALCON_ERR_Description[Math.abs(expectedRet)] + "), but got " + ret + " (" + falcConsts.FALCON_ERR_Description[Math.abs(ret)] + ") [reason: " + errorReasonCode + "]";
-                if (ret != expectedRet) console.log(errorStr);
-                assert.equal(ret, expectedRet, errorStr);
-                let tx = await falconInstance.verify.apply(null, verifyArgs);
-                let receipt = await tx.wait();
-                assert.equal(receipt.status, true);
-            }
+          suite.addTest(new Test(`KAT test ${kat.count} (precompiled)`, async() =>
+          {
+           await verifyKat(kat, falconCommonInterface, precompiledContractAddress); 
           }));
         });
-
-
       });
 
       it.skip("dummy", () =>
       {
         // Mocha needs at least one explicit declaration otherwise it ignores the whole suite.
       });
-
 
       const parseKats = async (katStream) =>
       {
@@ -116,35 +130,6 @@ describe("Falcon", async () =>
           kat[katLine[0].trim()] = katLine[1].trim();
         }
         return kats;
-      }
-
-      const getFalconReturnValue = (ret) =>
-      {
-        var isNegative = false;
-        if (ret < 0)
-        {
-          isNegative = true;
-          ret = Math.abs(ret);
-        }
-        var remainder = ret % 10;
-        if (isNegative)
-          remainder = -remainder;
-        return remainder;
-      }
-
-      const getReasonCode = (ret) =>
-      {
-        var isNegative = false;
-        if (ret < 0)
-        {
-          isNegative = true;
-          ret = Math.abs(ret);
-        }
-        var remainder = ret % 10;
-        var quotient = ret - remainder; // or maybe Math.floor(ret/10) or trunc(ret/10)
-        if (isNegative)
-          quotient = -quotient;
-        return quotient;
       }
     });
 });

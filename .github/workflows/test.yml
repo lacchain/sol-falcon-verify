@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       besu:
-        image: hyperledger/besu:23.1.0
+        image: ghcr.io/lacchain/lacchain-besu:23.7.3.0-rc2-amd64
         env:
           BESU_NETWORK: dev
           BESU_MIN_GAS_PRICE: 0
