@@ -977,7 +977,7 @@ contract Falcon
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function keccak_inc_absorb(uint32 r, uint8[] memory pInput, uint32 cbInput) public payable
+    function keccak_inc_absorb(uint32 r, bytes memory pInput, uint32 cbInput) public payable
     {
         uint32  i;
         uint32  msg_offset;
@@ -1092,7 +1092,7 @@ contract Falcon
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function OQS_SHA3_shake256_inc_absorb(uint8[] memory input, uint32 inlen) public payable
+    function OQS_SHA3_shake256_inc_absorb(bytes memory input, uint32 inlen) public payable
     {
         keccak_inc_absorb(SHAKE256_RATE, input, inlen);
     }
@@ -1262,7 +1262,7 @@ contract Falcon
     ////////////////////////////////////////
     //
     ////////////////////////////////////////
-    function PQCLEAN_FALCON512_CLEAN_modq_decode(uint16[] memory pX, uint16 logn, uint8[] memory pInput, uint16 In_offset, uint16 cbInputMax)  public pure returns (uint16)
+    function PQCLEAN_FALCON512_CLEAN_modq_decode(uint16[] memory pX, uint16 logn, bytes memory pInput, uint16 In_offset, uint16 cbInputMax)  public pure returns (uint16)
     {
         uint16        n;
         uint16        In_len;
@@ -1441,11 +1441,11 @@ contract Falcon
     //                                                const uint8_t*  pPublicKey)
     ////////////////////////////////////////
     function verify (uint8          signatureType,
-                     uint8[] memory pSignatureBuf,
+                     bytes calldata pSignatureBuf,
                      uint16         cbSignatureBuf,
-                     uint8[] memory pMessage,
+                     bytes memory pMessage,
                      uint16         cbMessage,
-                     uint8[] memory pPublicKey,
+                     bytes memory pPublicKey,
                      uint16         cbPublicKey) public payable returns (int16)
     {
 
@@ -1554,7 +1554,7 @@ contract Falcon
         // Start of Verification Proper
         ////////////////////////////////////////////////
 
-        uint8[]   memory pNonce  = new uint8[](NONCELEN);  // uint8[NONCELEN] memory pNonce;
+        bytes   memory pNonce  = new bytes(NONCELEN);  // uint8[NONCELEN] memory pNonce;
         uint16[]  memory pWordArrayH;                      // uint16[512]
         int16[]   memory pSignedWordArraySig;              // int16[512]
 
@@ -1577,7 +1577,7 @@ contract Falcon
                 uint sourceOffset = 1;
                 for (ii=0; ii<NONCELEN; ii++)
                 {
-                    pNonce[ii] = uint8(pSignatureBuf[sourceOffset + ii]);
+                    pNonce[ii] = pSignatureBuf[sourceOffset + ii];
                 }
 
                 sourceOffset = 1 + NONCELEN;
